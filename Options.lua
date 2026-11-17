@@ -27,6 +27,8 @@ local CHECKS = {
 local UNITS = { { "player", "On me" }, { "target", "On target" } }
 local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" } }
 local MODES = { { "present", "Active" }, { "missing", "Missing" } }
+local DTYPES = { { "Poison", "Poison" }, { "Curse", "Curse" }, { "Disease", "Disease" }, { "Magic", "Magic" },
+  { "any", "Any dispellable" } }
 
 local function BuildEditor(p)
   local e = { rows = {} }
@@ -66,6 +68,13 @@ local function BuildEditor(p)
     ui.Refresh(); Changed()
   end)
   e.newAura:SetScript("OnEnterPressed", function() e.addAura:Click() end)
+  e.addType = UI.Button(p, "+ Add type", 90, function()
+    local r = Rule(); if not r then return end
+    local c = ns.Copy(ns.NEW_AURA); c.match = "type"; c.kind = "debuff"; c.dtype = "Poison"
+    table.insert(r.auras, c)
+    ui.Refresh(); Changed()
+  end)
+  e.addType.tip = "A condition on any debuff (or buff) of one type: poison, curse, disease or magic. No names needed, and no Cooldown Manager."
   e.addNote = UI.Text(p, "note", "Blank = the spell itself.")
 
   -- other conditions
@@ -95,6 +104,8 @@ local function BuildEditor(p)
     row.name = UI.Edit(row, 130, { function() local a = A(); return a and a.name end,
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
+    row.dtype = UI.Toggle(row, 130, DTYPES, Field(A, "dtype"), refresh, "Which type. Click to switch.")
+    row.dtype:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
     row.ge = UI.Text(row, "note", ">=")
     row.ge:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
     row.stacks = UI.Edit(row, 28, { function() local a = A(); return a and a.stacks end,
@@ -146,12 +157,15 @@ local function BuildEditor(p)
       local a = A()
       if not a then return end
       local r = Rule()
-      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.stacks, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
-      local stackable = a.mode ~= "missing"
+      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.dtype, row.stacks, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
+      local byType = a.match == "type"
+      row.name:SetShown(not byType); row.dtype:SetShown(byType)
+      local stackable = a.mode ~= "missing" and not byType
       row.stacks:SetShown(stackable); row.ge:SetShown(stackable)
-      local tdebuff = a.unit == "target" and a.kind == "debuff"
+      row.dot:SetShown(not byType) -- types are read directly: no Cooldown Manager needed
+      local tdebuff = a.unit == "target" and a.kind == "debuff" and not byType
       for _, w in ipairs(row.extra) do w:SetShown(tdebuff) end
-      local an = ns.AuraName(r, a)
+      local an = (not byType) and ns.AuraName(r, a)
       local tracked = an and ns.State.Tracked(an) or false
       row.dot.tracked = tracked
       if tracked then row.dot.tex:SetVertexColor(0.35, 0.9, 0.35) else row.dot.tex:SetVertexColor(0.9, 0.3, 0.25) end
@@ -183,8 +197,9 @@ local function BuildEditor(p)
     for i = n + 1, #e.rows do e.rows[i]:Hide() end
     e.newAura:ClearAllPoints(); e.newAura:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y - 2)
     e.addAura:ClearAllPoints(); e.addAura:SetPoint("LEFT", e.newAura, "RIGHT", 6, 0)
-    e.addNote:ClearAllPoints(); e.addNote:SetPoint("LEFT", e.addAura, "RIGHT", 10, 0)
-    y = y - 40
+    e.addType:ClearAllPoints(); e.addType:SetPoint("LEFT", e.addAura, "RIGHT", 6, 0)
+    e.addNote:ClearAllPoints(); e.addNote:SetPoint("TOPLEFT", e.newAura, "BOTTOMLEFT", 0, -4)
+    y = y - 50
     place(e.secOther, 0, 30)
     for i, cb in ipairs(e.checks) do
       cb:ClearAllPoints()
@@ -200,7 +215,7 @@ local function BuildEditor(p)
     local r = Rule()
     local shown = r ~= nil
     for _, w in ipairs({ e.icon, e.enabled, e.secSpell, e.spell, e.spellNote, e.secAuras, e.cdmNote, e.newAura, e.addAura,
-      e.addNote, e.secOther, e.secStatus, e.status }) do w:SetShown(shown) end
+      e.addType, e.addNote, e.secOther, e.secStatus, e.status }) do w:SetShown(shown) end
     for _, cb in ipairs(e.checks) do cb:SetShown(shown) end
     if not r then
       e.title:SetText("Add a rule to start")
@@ -234,13 +249,17 @@ local function BuildEditor(p)
     lines[#lines + 1] = nb > 0 and format("On your action bars: %d button%s", nb, nb == 1 and "" or "s")
       or "|cffff6060Not on any of Blizzard's action bars.|r"
     for _, a in ipairs(r.auras) do
-      local an = ns.AuraName(r, a)
+      local an = ns.AuraLabel(r, a)
       if an then
         local has, how = ns.State.AuraPresent(a, an)
         local where = a.unit == "target" and "your target" or "you"
         local state = has == nil and "|cffffd200can't tell|r" or (has and "on " .. where or "not on " .. where)
-        local cdm = ns.State.Tracked(an) and "|cff60ff60tracked|r" or "|cffff6060not tracked|r"
-        lines[#lines + 1] = format("%s: %s (%s), Cooldown Manager: %s", an, state, HOW[how] or how or "?", cdm)
+        if a.match == "type" then
+          lines[#lines + 1] = format("%s: %s (%s)", an:gsub("^%l", string.upper), state, HOW[how] or how or "?")
+        else
+          local cdm = ns.State.Tracked(an) and "|cff60ff60tracked|r" or "|cffff6060not tracked|r"
+          lines[#lines + 1] = format("%s: %s (%s), Cooldown Manager: %s", an, state, HOW[how] or how or "?", cdm)
+        end
       end
     end
     e.status:SetText(table.concat(lines, "\n"))
@@ -374,6 +393,8 @@ local function PageHelp(pg)
     "each one says who has it (you or your target), whether it's a buff or a debuff, and whether it must be active or missing.")
   para("Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you with at least 5 stacks, " ..
     "and Flame Shock is on your target.", "note")
+  para("+ Add type matches any debuff (or buff) of a type instead of a name: Poison, Curse, Disease, Magic or any dispellable. " ..
+    "Example: Cure Poison glows while a Poison debuff is on you. Types on you are read even in combat, no Cooldown Manager needed.", "note")
   sec("The Cooldown Manager is required in combat")
   para("In combat, the game hides buffs and debuffs from addons. Spell Glow follows them through Blizzard's Cooldown Manager instead, " ..
     "so turn it on and add every buff and debuff your rules use to its Tracked Buffs or Tracked Bars. " ..

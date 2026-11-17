@@ -223,12 +223,32 @@ end
 -- Is it there? true/false, or nil when the game won't say (combat, not in the Cooldown Manager);
 -- plus how it was decided: "aura", "exact", "hidden", "cdm", "your cast", "guess", "unknown".
 function S.AuraPresent(a, name)
+  if a.match == "type" then return S.AuraTypePresent(a.unit == "target" and "target" or "player", a.kind, a.dtype) end
   if a.unit == "target" then
     if a.kind == "debuff" then return S.TargetDebuff(name, a.mine, a.dur) end
     return S.TargetBuff(name)
   end
   if a.kind == "debuff" then return S.MyDebuff(name) end
   return S.HasBuff(name)
+end
+
+-- Is any aura of a dispel type on the unit? ("Poison", "Curse", "Disease", "Magic", or "any"
+-- for any of them.) Forever lets addons read your own debuffs and their type even in combat,
+-- so this asks directly; if the game refuses or hides it (e.g. a target in combat): nil.
+function S.AuraTypePresent(unit, kind, dtype)
+  if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil, "unknown" end
+  if not UnitExists(unit) then return false, "exact" end
+  local filter = (kind == "buff") and "HELPFUL" or "HARMFUL"
+  for i = 1, 40 do
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, filter)
+    if not ok then return nil, "unknown" end
+    if a == nil then return false, "exact" end
+    if not canAccess(a) then return nil, "unknown" end
+    local d = a.dispelName
+    if isSecret(d) then return nil, "unknown" end
+    if d and d ~= "" and (dtype == "any" or d == dtype) then return true, "exact" end
+  end
+  return false, "exact"
 end
 
 -- How many stacks: a number, the game's hidden number, or nil; plus where it came from.
@@ -315,7 +335,7 @@ function S.OnCast(spellID)
   if not ns.db then return end
   for _, r in ipairs(ns.db.rules) do
     for _, a in ipairs(r.auras or {}) do
-      if a.unit == "target" and a.kind == "debuff" then
+      if a.unit == "target" and a.kind == "debuff" and a.match ~= "type" then
         local dn = ns.AuraName(r, a)
         local charges = tonumber(a.charges) or 0
         -- a spell that uses it up (e.g. Lightning Bolt using up Stormstrike's bonus)

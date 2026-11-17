@@ -10,6 +10,7 @@ Features
   - buff or debuff
   - active or missing, with an optional minimum stack count
   - for your debuffs on a target: only mine, and a backup from your casts (how long it lasts, used up after N casts of chosen spells)
+- Debuff types: match any Poison, Curse, Disease or Magic debuff (or buff), or any dispellable one, on you or your target, instead of a name. Example: Cure Poison glows while a poison is on you. Your own debuffs' types are read even in combat, with no Cooldown Manager needed.
 - Other conditions: being attacked in melee, castable (known, enough mana), off cooldown (global cooldown ignored), I have control (not stunned), only in combat, the game flags it as a proc.
 - Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, and Flame Shock is on your target.
 - Combat-aware: follows buffs, debuffs and stack counts through Blizzard's Cooldown Manager; each condition shows whether it's tracked there.
@@ -35,6 +36,7 @@ Known limits
 - The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
+- 1.8.0: Debuff type conditions: glow while any Poison, Curse, Disease or Magic debuff (or buff) is on you or your target, or is missing. No names or Cooldown Manager needed; works in combat for your own debuffs.
 - 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.
 - 1.6.0: Choose how the glow starts (just the glow, glow + shine, or Blizzard's zoom-in burst) and its intensity.

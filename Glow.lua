@@ -187,18 +187,19 @@ function G.Evaluate(rule)
   if rule.control and not S.HasControl() then return false, "no control (stunned...)" end
   if rule.melee and not S.BeingMeleed() then return false, "not being hit in melee" end
   for _, a in ipairs(rule.auras or {}) do
-    local an = ns.AuraName(rule, a)
+    local an = ns.AuraLabel(rule, a)
     if not an then return false, "name the aura" end
     local who = (a.unit == "target") and "your target" or "you"
     local has = S.AuraPresent(a, an)
     if has == nil then
+      if a.match == "type" then return false, format("can't tell if %s is on %s right now", an, who) end
       return false, format("%s on %s is hidden in combat (track it in the Cooldown Manager)", an, who)
     end
     if a.mode == "missing" then
       if has then return false, format("%s is on %s", an, who) end
     else
       if not has then return false, format("%s is not on %s", an, who) end
-      local min = tonumber(a.stacks) or 0
+      local min = (a.match ~= "type") and tonumber(a.stacks) or 0
       if min > 1 then
         local st = S.AuraStacks(a, an)
         if st == nil then return false, an .. ": stacks can't be read (track it in the Cooldown Manager)" end

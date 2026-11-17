@@ -13,7 +13,8 @@ function ns.Print(...) print("|cffffd200Spell Glow:|r", ...) end
 --                 kind = "buff" | "debuff", mode = "present" | "missing", stacks = 0 (at least; 0/1 = any),
 --                 mine = true (target auras: only yours), and for your debuffs on a target, the backup
 --                 used in combat when it isn't in the Cooldown Manager: dur (s it lasts, 0 = auto),
---                 charges / usedBy (used up after that many casts of those spells; 0 = not used up) }
+--                 charges / usedBy (used up after that many casts of those spells; 0 = not used up),
+--                 match = "type" with dtype instead matches any aura of that dispel type (Poison...) }
 --   melee       you're being attacked in melee (hit / dodged / parried / blocked recently)
 --   usable      castable: known and enough mana
 --   ready       off cooldown (the global cooldown doesn't count)
@@ -23,7 +24,19 @@ function ns.Print(...) print("|cffffd200Spell Glow:|r", ...) end
 ns.NEW_RULE = { enabled = true, spell = "", auras = {},
   melee = false, usable = true, ready = true, control = true, combat = false, proc = false }
 ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", stacks = 0, mine = true,
-  dur = 0, charges = 0, usedBy = "" }
+  dur = 0, charges = 0, usedBy = "",
+  match = "name",     -- "name": this buff/debuff; "type": any aura of type dtype
+  dtype = "Poison" }  -- "Poison" | "Curse" | "Disease" | "Magic" | "any" (any dispellable)
+
+-- how a condition reads in messages: its aura's name, or e.g. "a Poison debuff"
+function ns.AuraLabel(rule, a)
+  if a.match == "type" then
+    local what = (a.kind == "buff") and "buff" or "debuff"
+    if a.dtype == "any" then return "a dispellable " .. what end
+    return "a " .. (a.dtype or "?") .. " " .. what
+  end
+  return ns.AuraName(rule, a)
+end
 
 ns.DEFAULTS = {
   meleeWindow = 3,   -- seconds a melee hit on you counts as "being attacked in melee"
