@@ -32,10 +32,21 @@ local function ButtonSpell(b)
   if not action or isSecret(action) then return nil end
   local cached = slotCache[action]
   if cached ~= nil then return cached or nil end
-  local kind, id = GetActionInfo(action)
+  local kind, id, subType = GetActionInfo(action)
+  if isSecret(kind) or isSecret(id) then return nil end
   local name
-  if kind == "spell" then name = ns.SpellName(id)
-  elseif kind == "macro" and GetMacroSpell then name = ns.SpellName(GetMacroSpell(id)) end
+  if kind == "spell" then
+    name = ns.SpellName(id)
+  elseif kind == "macro" then
+    -- newer clients hand back the spell the macro casts (subType "spell"); older ones the
+    -- macro's index, to ask which spell it casts
+    if subType == "spell" then name = ns.SpellName(id) end
+    if not name and GetMacroSpell then
+      local ok, sid = pcall(GetMacroSpell, id)
+      if ok and not isSecret(sid) then name = ns.SpellName(sid) end
+    end
+    return name -- not cached: a macro with [conditions] can switch spells at any moment
+  end
   slotCache[action] = name or false
   return name
 end

@@ -35,6 +35,7 @@ Known limits
 - The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
+- 1.7.1: Spells cast from macros now glow (the macro's spell wasn't recognized on newer clients); macros with conditions follow the spell they'd cast right now.
 - 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.
 - 1.6.0: Choose how the glow starts (just the glow, glow + shine, or Blizzard's zoom-in burst) and its intensity.
