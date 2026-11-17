@@ -562,6 +562,32 @@ local function Probe()
       end
     end
   end
+  -- 2c) the border Blizzard colours by debuff type: can an addon see that colour?
+  if type(frames) == "table" then
+    local shown = 0
+    for _, b in ipairs(frames) do
+      if b.IsShown and b:IsShown() and shown < 3 then
+        shown = shown + 1
+        local nm = b.GetName and b:GetName()
+        local border = b.Border or b.border or (nm and _G[nm .. "Border"])
+        if not border and b.GetRegions then
+          for _, r in ipairs({ b:GetRegions() }) do
+            local rn = r.GetName and r:GetName()
+            if rn and rn:find("Border") then border = r end
+          end
+        end
+        if not border then print(format("  2c. icon %d (%s): no border found", shown, tostring(nm)))
+        else
+          local ok, r, g, bl = pcall(border.GetVertexColor, border)
+          local vis = border.IsShown and border:IsShown()
+          print(format("  2c. icon %d border: shown=%s color=%s", shown, show(vis),
+            not ok and "refused" or (sec(r) and "hidden" or format("%.2f %.2f %.2f", r or -1, g or -1, bl or -1))))
+        end
+      end
+    end
+    local p = DebuffTypeColor and DebuffTypeColor.Poison
+    if p then print(format("  2c. (Blizzard's poison color: %.2f %.2f %.2f)", p.r, p.g, p.b)) end
+  end
   -- 2b) instance IDs from the game's "your auras changed" notices
   local seen = ns.seenAuraIDs or {}
   print(format("  2b. from aura-change notices: %d ID(s), latest: %s", #seen, show(seen[1])))
