@@ -289,6 +289,16 @@ function G.Init()
   end
   pcall(ev.RegisterUnitEvent, ev, "UNIT_AURA", "player", "target")
   ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4, a5)
+    -- remember the aura instance IDs the game hands out with "your auras changed" (for /sglow probe)
+    if event == "UNIT_AURA" and a1 == "player" and type(a2) == "table" and not ns.isSecret(a2) then
+      pcall(function()
+        for _, au in ipairs(a2.addedAuras or {}) do
+          ns.seenAuraIDs = ns.seenAuraIDs or {}
+          table.insert(ns.seenAuraIDs, 1, au.auraInstanceID)
+          ns.seenAuraIDs[9] = nil
+        end
+      end)
+    end
     if event == "UNIT_COMBAT" then
       S.OnUnitCombat(a2, a3, a4, a5)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then

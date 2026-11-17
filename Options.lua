@@ -518,7 +518,7 @@ end
 local function Probe()
   local sec = ns.isSecret
   local function show(v) if sec(v) then return "hidden" end return tostring(v) end
-  ns.Print("probe (" .. (InCombatLockdown() and "in combat" or "out of combat") .. "), keep a debuff on you:")
+  ns.Print("probe (" .. (InCombatLockdown() and "in combat" or "out of combat") .. "), get a NEW debuff in this fight, then run it:")
   local ids = {}
   -- 1) the game's list of your debuffs' instance IDs
   local f = C_UnitAuras and C_UnitAuras.GetUnitAuraInstanceIDs
@@ -547,7 +547,25 @@ local function Probe()
       end
     end
     print(format("  2. Blizzard's debuff icons: %d shown, %d with an instance ID", n, got))
+    -- what Forever keeps on its debuff icons (field names only)
+    for _, b in ipairs(frames) do
+      if b.IsShown and b:IsShown() then
+        local keys = {}
+        for k, v in pairs(b) do
+          if type(k) == "string" and type(v) ~= "function" and type(v) ~= "userdata" then
+            keys[#keys + 1] = k .. (type(v) == "table" and "{}" or ("=" .. show(v)))
+          end
+        end
+        table.sort(keys)
+        print("  2. icon fields: " .. table.concat(keys, ", "):sub(1, 230))
+        break
+      end
+    end
   end
+  -- 2b) instance IDs from the game's "your auras changed" notices
+  local seen = ns.seenAuraIDs or {}
+  print(format("  2b. from aura-change notices: %d ID(s), latest: %s", #seen, show(seen[1])))
+  if #ids == 0 then for _, id in ipairs(seen) do ids[#ids + 1] = id end end
   if #ids == 0 then print("  no instance IDs to test further"); return end
   -- 3) the hidden type color, through a color curve (Poison = opaque, everything else = clear)
   local okC, curve = pcall(function() return C_CurveUtil.CreateColorCurve() end)
