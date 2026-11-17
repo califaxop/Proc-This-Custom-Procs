@@ -403,6 +403,7 @@ local function PageHelp(pg)
     "(for example another player's curse) can only be checked out of combat.", "note")
   local cdm = UI.Text(pg, "line", ""); cdm:SetPoint("TOPLEFT", 0, y); y = y - 26
   sec("Commands")
+  para("/sglow types  shows your debuffs and their types as Spell Glow sees them (try it in combat)", "line")
   para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
     "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)")
   pg:SetScript("OnShow", function()
@@ -492,7 +493,28 @@ local function ListAuras()
   if not any then ns.Print("no auras found on you or your target.") end
 end
 
+-- /sglow types: what Spell Glow can see of your debuffs' types right now (to check combat)
+local function ListTypes()
+  local sec = ns.isSecret
+  ns.Print("your debuffs, as Spell Glow sees them" .. (InCombatLockdown() and " (in combat):" or ":"))
+  local any = false
+  for i = 1, 40 do
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HARMFUL")
+    if not ok then print("  the game refused: " .. tostring(a)); return end
+    if not a then break end
+    any = true
+    if sec(a) then print("  #" .. i .. ": hidden") else
+      local okN, n = pcall(function() return a.name end)
+      local okD, d = pcall(function() return a.dispelName end)
+      print(format("  #%d: %s - type: %s", i, (okN and not sec(n)) and tostring(n) or "hidden",
+        not okD and "error" or (sec(d) and "hidden" or tostring(d or "none"))))
+    end
+  end
+  if not any then print("  none") end
+end
+
 SlashCmdList.SPELLGLOW = function(msg)
+  if (msg or ""):lower():match("^type") then ListTypes(); return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
   local ok, e = pcall(ns.OpenOptions)

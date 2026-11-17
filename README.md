@@ -23,6 +23,7 @@ Settings and commands
 - /spellglow or /sglow: the settings window (Rules, Look, Help).
 - /sglow test: show every rule's glow for 3 seconds.
 - /sglow auras: list your target's and your own buffs and debuffs with spell IDs (out of combat).
+- /sglow types: your debuffs and their types as Spell Glow sees them (works in combat).
 - Esc > Options > AddOns > Spell Glow.
 
 Requirements

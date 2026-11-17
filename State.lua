@@ -239,15 +239,21 @@ function S.AuraTypePresent(unit, kind, dtype)
   if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil, "unknown" end
   if not UnitExists(unit) then return false, "exact" end
   local filter = (kind == "buff") and "HELPFUL" or "HARMFUL"
+  local unsure = false
   for i = 1, 40 do
     local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, filter)
     if not ok then return nil, "unknown" end
-    if a == nil then return false, "exact" end
-    if not canAccess(a) then return nil, "unknown" end
-    local d = a.dispelName
-    if isSecret(d) then return nil, "unknown" end
-    if d and d ~= "" and (dtype == "any" or d == dtype) then return true, "exact" end
+    if a == nil then break end
+    if isSecret(a) then
+      unsure = true -- the whole aura is hidden: can't see its type
+    else
+      -- only the type is read: in combat other fields (timers...) can be hidden while the type isn't
+      local okD, d = pcall(function() return a.dispelName end)
+      if not okD or isSecret(d) then unsure = true
+      elseif d and d ~= "" and (dtype == "any" or d == dtype) then return true, "exact" end
+    end
   end
+  if unsure then return nil, "unknown" end
   return false, "exact"
 end
 
