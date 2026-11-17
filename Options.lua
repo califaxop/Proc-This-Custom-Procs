@@ -513,7 +513,64 @@ local function ListTypes()
   if not any then print("  none") end
 end
 
+-- /sglow probe: which in-combat routes to your debuffs' types this client allows an addon
+-- (instance IDs from the game or Blizzard's own debuff icons, the hidden type color, applying it)
+local function Probe()
+  local sec = ns.isSecret
+  local function show(v) if sec(v) then return "hidden" end return tostring(v) end
+  ns.Print("probe (" .. (InCombatLockdown() and "in combat" or "out of combat") .. "), keep a debuff on you:")
+  local ids = {}
+  -- 1) the game's list of your debuffs' instance IDs
+  local f = C_UnitAuras and C_UnitAuras.GetUnitAuraInstanceIDs
+  if not f then print("  1. GetUnitAuraInstanceIDs: not in this client")
+  else
+    local ok, r = pcall(f, "player", "HARMFUL")
+    if not ok then print("  1. GetUnitAuraInstanceIDs: refused (" .. tostring(r) .. ")")
+    elseif sec(r) then print("  1. GetUnitAuraInstanceIDs: hidden list")
+    elseif type(r) == "table" then
+      print("  1. GetUnitAuraInstanceIDs: " .. #r .. " ID(s), first: " .. show(r[1]))
+      for _, id in ipairs(r) do ids[#ids + 1] = id end
+    else print("  1. GetUnitAuraInstanceIDs: " .. show(r)) end
+  end
+  -- 2) Blizzard's own debuff icons by the minimap
+  local df = _G.DebuffFrame
+  local frames = df and (df.auraFrames or (df.AuraContainer and { df.AuraContainer:GetChildren() }))
+  if type(frames) ~= "table" then print("  2. Blizzard's debuff icons: not found")
+  else
+    local n, got = 0, 0
+    for _, b in ipairs(frames) do
+      if b.IsShown and b:IsShown() then
+        n = n + 1
+        local id = b.auraInstanceID or (b.buttonInfo and b.buttonInfo.auraInstanceID)
+        if id ~= nil then got = got + 1; if #ids == 0 or got == 1 then ids[#ids + 1] = id end end
+        if n == 1 then print("  2. first debuff icon's instance ID: " .. show(id)) end
+      end
+    end
+    print(format("  2. Blizzard's debuff icons: %d shown, %d with an instance ID", n, got))
+  end
+  if #ids == 0 then print("  no instance IDs to test further"); return end
+  -- 3) the hidden type color, through a color curve (Poison = opaque, everything else = clear)
+  local okC, curve = pcall(function() return C_CurveUtil.CreateColorCurve() end)
+  if not okC or not curve then print("  3. CreateColorCurve: failed (" .. tostring(curve) .. ")"); return end
+  local POISON = (Enum and Enum.AuraDispelType and Enum.AuraDispelType.Poison) or 4
+  pcall(curve.SetType, curve, Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step)
+  local okP = pcall(function()
+    curve:AddPoint(0, CreateColor(1, 1, 1, 0)); curve:AddPoint(POISON, CreateColor(1, 1, 1, 1))
+    curve:AddPoint(POISON + 1, CreateColor(1, 1, 1, 0))
+  end)
+  print("  3. color curve points: " .. (okP and "ok" or "failed") .. " (Poison = " .. tostring(POISON) .. ")")
+  local okG, col = pcall(C_UnitAuras.GetAuraDispelTypeColor, "player", ids[1], curve)
+  if not okG then print("  3. GetAuraDispelTypeColor: refused (" .. tostring(col) .. ")"); return end
+  local a = col and (col.a or (col.GetRGBA and select(4, col:GetRGBA())))
+  print("  3. GetAuraDispelTypeColor: got " .. (col == nil and "nothing" or ("a color, alpha " .. show(a))))
+  -- 4) can a frame take that hidden alpha? (that's how the glow would be shown or hidden)
+  local t = CreateFrame("Frame")
+  local okA, e = pcall(t.SetAlpha, t, a)
+  print("  4. frame:SetAlpha(hidden alpha): " .. (okA and "ok" or ("refused (" .. tostring(e) .. ")")))
+end
+
 SlashCmdList.SPELLGLOW = function(msg)
+  if (msg or ""):lower():match("^probe") then Probe(); return end
   if (msg or ""):lower():match("^type") then ListTypes(); return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
