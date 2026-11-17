@@ -186,44 +186,26 @@ function G.Evaluate(rule)
   if rule.combat and not S.InCombat() then return false, "not in combat" end
   if rule.control and not S.HasControl() then return false, "no control (stunned...)" end
   if rule.melee and not S.BeingMeleed() then return false, "not being hit in melee" end
-  for _, bc in ipairs(rule.buffs or {}) do
-    local bn = ns.BuffCondName(rule, bc)
-    local has = S.HasBuff(bn)
-    if bc.mode == "missing" then
-      if has then return false, bn .. " is on you" end
+  for _, a in ipairs(rule.auras or {}) do
+    local an = ns.AuraName(rule, a)
+    if not an then return false, "name the aura" end
+    local who = (a.unit == "target") and "your target" or "you"
+    local has = S.AuraPresent(a, an)
+    if has == nil then
+      return false, format("%s on %s is hidden in combat (track it in the Cooldown Manager)", an, who)
+    end
+    if a.mode == "missing" then
+      if has then return false, format("%s is on %s", an, who) end
     else
-      if not has then return false, bn .. " is not on you" end
-      local min = tonumber(bc.stacks) or 0
+      if not has then return false, format("%s is not on %s", an, who) end
+      local min = tonumber(a.stacks) or 0
       if min > 1 then
-        local st = S.BuffStacks(bn)
-        if st == nil then return false, bn .. ": stacks can't be read (track it in the Cooldown Manager)" end
+        local st = S.AuraStacks(a, an)
+        if st == nil then return false, an .. ": stacks can't be read (track it in the Cooldown Manager)" end
         if isSecret(st) then gates[#gates + 1] = { kind = "stacks", v = st, min = min }
-        elseif st < min then return false, format("%s: %d of %d stacks", bn, st, min) end
+        elseif st < min then return false, format("%s: %d of %d stacks", an, st, min) end
       end
     end
-  end
-  if (rule.tdebuff or "ignore") ~= "ignore" then
-    local dn = ns.RuleTargetDebuffName(rule)
-    local has = S.TargetDebuff(dn, rule.tdebuffMine, rule.tdebuffDur)
-    if has == nil then return false, dn .. " on your target is hidden in combat (tick Only mine)" end
-    if rule.tdebuff == "missing" and has then return false, dn .. " is on your target" end
-    if rule.tdebuff == "present" and not has then return false, dn .. " is not on your target" end
-  end
-  if (rule.tbuff or "ignore") ~= "ignore" then
-    local bn = ns.RuleTargetBuffName(rule)
-    if not bn then return false, "name the buff on your target" end
-    local has = ns.State.TargetBuff(bn)
-    if has == nil then return false, "your target's buffs are hidden in combat" end
-    if rule.tbuff == "missing" and has then return false, bn .. " is on your target" end
-    if rule.tbuff == "present" and not has then return false, bn .. " is not on your target" end
-  end
-  if (rule.pdebuff or "ignore") ~= "ignore" then
-    local dn = ns.RuleMyDebuffName(rule)
-    if not dn then return false, "name the debuff on you" end
-    local has = S.MyDebuff(dn)
-    if has == nil then return false, "your debuffs are hidden in combat" end
-    if rule.pdebuff == "missing" and has then return false, dn .. " is on you" end
-    if rule.pdebuff == "present" and not has then return false, dn .. " is not on you" end
   end
   if rule.proc and not S.Flagged(name) then return false, "not flagged as a proc" end
   if rule.ready and not S.Ready(name) then return false, "on cooldown" end

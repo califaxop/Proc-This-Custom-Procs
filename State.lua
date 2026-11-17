@@ -106,15 +106,9 @@ function S.HasBuff(name)
   return known[name] or false, "guess"
 end
 
--- How many stacks of buff `name` you have: a number, the game's hidden number (only the
--- client can compare it), or nil if it can't be told. Plus where it came from.
--- Out of combat: your buff directly. In combat: its Cooldown Manager icon's aura data.
-function S.BuffStacks(name)
-  if not S.AurasLocked() and C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
-    local ok, a = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", name, "HELPFUL")
-    if ok and a == nil then return 0, "aura" end
-    if ok and canAccess(a) and Readable(a.applications) then return math.max(1, a.applications), "aura" end
-  end
+-- Stacks from the Cooldown Manager icon tracking `name`: a number, the game's hidden number,
+-- or nil if it can't be told; plus where it came from.
+local function StacksFromCooldownManager(name)
   local active, item = FromCooldownManager(name)
   if active == nil then return nil, "untracked" end
   if not active then return 0, "cdm" end
@@ -129,6 +123,16 @@ function S.BuffStacks(name)
   if isSecret(apps) then return apps, "hidden" end
   if type(apps) == "number" then return math.max(1, apps), "cdm" end
   return 1, "cdm" -- active with no stack count: one
+end
+
+-- How many stacks of buff `name` you have (see AuraStacks).
+function S.BuffStacks(name)
+  if not S.AurasLocked() and C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
+    local ok, a = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", name, "HELPFUL")
+    if ok and a == nil then return 0, "aura" end
+    if ok and canAccess(a) and Readable(a.applications) then return math.max(1, a.applications), "aura" end
+  end
+  return StacksFromCooldownManager(name)
 end
 
 -- For the settings window: can this buff/debuff be followed in combat?
@@ -181,7 +185,10 @@ end
 -- Is buff `name` on your target? (anyone's buff: no cast backup)
 function S.TargetBuff(name)
   local present, how = Query("target", name, "HELPFUL")
-  return present, present == nil and "unknown" or how
+  if present ~= nil then return present, how end
+  local cdm = FromCooldownManager(name)
+  if cdm ~= nil then return cdm, "cdm" end
+  return nil, "unknown"
 end
 
 -- Is debuff `name` on you?
@@ -203,6 +210,38 @@ function S.UseDebuffCharge(name)
   if c and c.left then c.left = c.left - 1 end
 end
 function S.OnTargetChanged() wipe(castAt) end
+
+---------------------------------------------------------------------------
+-- One aura condition of a rule (see ns.NEW_AURA): on you or your target, a buff or a debuff.
+---------------------------------------------------------------------------
+local function AuraFilter(a)
+  local f = (a.kind == "debuff") and "HARMFUL" or "HELPFUL"
+  if a.unit == "target" and a.mine then f = f .. "|PLAYER" end
+  return f
+end
+
+-- Is it there? true/false, or nil when the game won't say (combat, not in the Cooldown Manager);
+-- plus how it was decided: "aura", "exact", "hidden", "cdm", "your cast", "guess", "unknown".
+function S.AuraPresent(a, name)
+  if a.unit == "target" then
+    if a.kind == "debuff" then return S.TargetDebuff(name, a.mine, a.dur) end
+    return S.TargetBuff(name)
+  end
+  if a.kind == "debuff" then return S.MyDebuff(name) end
+  return S.HasBuff(name)
+end
+
+-- How many stacks: a number, the game's hidden number, or nil; plus where it came from.
+function S.AuraStacks(a, name)
+  if a.unit ~= "target" and a.kind ~= "debuff" then return S.BuffStacks(name) end
+  local unit = (a.unit == "target") and "target" or "player"
+  if not S.AurasLocked() and C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
+    local ok, au = pcall(C_UnitAuras.GetAuraDataBySpellName, unit, name, AuraFilter(a))
+    if ok and au == nil then return 0, "aura" end
+    if ok and canAccess(au) and Readable(au.applications) then return math.max(1, au.applications), "aura" end
+  end
+  return StacksFromCooldownManager(name)
+end
 
 ---------------------------------------------------------------------------
 -- Being attacked in melee: any hit, dodge, parry, block or miss on you recently.
@@ -267,25 +306,27 @@ function S.OnOverlay(show, spellID)
 end
 function S.Flagged(name) return flagged[name] and true or false end
 
--- You cast it: the buff is on you now (until we learn otherwise), and if it's a debuff some
--- rule watches on your target, it's on your target now.
+-- You cast it: the buff is on you now (until we learn otherwise), and if it's a debuff of yours
+-- that some rule watches on your target, it's on your target now.
 function S.OnCast(spellID)
   local n = Readable(spellID) and ns.SpellName(spellID)
   if not n then return end
   known[n] = true
   if not ns.db then return end
   for _, r in ipairs(ns.db.rules) do
-    if (r.tdebuff or "ignore") ~= "ignore" then
-      local dn = ns.RuleTargetDebuffName(r)
-      local charges = tonumber(r.tdebuffCharges) or 0
-      -- a spell that uses it up (e.g. Lightning Bolt using up Stormstrike's bonus)
-      if charges > 0 and dn ~= n then
-        for _, used in ipairs(ns.RuleUsedBy(r)) do
-          if used == n then S.UseDebuffCharge(dn) end
+    for _, a in ipairs(r.auras or {}) do
+      if a.unit == "target" and a.kind == "debuff" then
+        local dn = ns.AuraName(r, a)
+        local charges = tonumber(a.charges) or 0
+        -- a spell that uses it up (e.g. Lightning Bolt using up Stormstrike's bonus)
+        if charges > 0 and dn ~= n then
+          for _, used in ipairs(ns.AuraUsedBy(r, a)) do
+            if used == n then S.UseDebuffCharge(dn) end
+          end
         end
+        -- you applied it
+        if dn == n and UnitExists("target") then S.NoteDebuffCast(n, charges) end
       end
-      -- you applied it
-      if dn == n and UnitExists("target") then S.NoteDebuffCast(n, charges) end
     end
   end
 end

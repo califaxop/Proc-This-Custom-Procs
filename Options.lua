@@ -1,473 +1,420 @@
 -- Spell Glow: settings window (/spellglow or /sglow, or Esc > Options > AddOns > Spell Glow) and start-up.
+-- Drawn in the same style as XP Planner (see UI.lua): tabs for Rules, Look and Help.
 local _, ns = ...
-
-local function Label(parent, text, template)
-  local fs = parent:CreateFontString(nil, "ARTWORK", template or "GameFontNormal")
-  fs:SetText(text)
-  return fs
-end
-
-local function Button(parent, text, width, onClick)
-  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-  b:SetSize(width, 22); b:SetText(text); b:SetScript("OnClick", onClick)
-  return b
-end
+local UI = ns.UI
 
 local function Changed() ns.Glow.Soon() end
 
 local selected = 1
 local win, ui
 local function Rule() return ns.db.rules[selected] end
+local function Field(tbl, key) return { function() local t = tbl(); return t and t[key] end, function(v) local t = tbl(); if t then t[key] = v end end } end
+
+local LIST_W, EDIT_X, EDIT_W, PAGE_H = 196, 220, 486, 470
+local EW = EDIT_W - 16 -- editor content width
 
 ---------------------------------------------------------------------------
--- Rule editor (right side)
+-- Rule editor: spell, aura conditions (as many as you like), other conditions, live status
 ---------------------------------------------------------------------------
 local CHECKS = {
-  { "melee",   "I'm being attacked in melee" },
+  { "melee",   "Being attacked in melee" },
   { "usable",  "Castable (known, enough mana)" },
-  { "ready",   "Off cooldown (the global cooldown doesn't count)" },
-  { "control", "I have control (not stunned, feared...)" },
+  { "ready",   "Off cooldown (GCD ignored)" },
+  { "control", "I have control (not stunned)" },
   { "combat",  "Only in combat" },
   { "proc",    "The game flags it as a proc" },
 }
-local BUFF_MODES = { { "ignore", "Don't check" }, { "missing", "Glow when it's MISSING" }, { "present", "Glow when it's ON me" } }
-local TDEBUFF_MODES = { { "ignore", "Don't check" }, { "missing", "Glow when it's MISSING" }, { "present", "Glow when it's ON it" } }
-
--- "Don't check / missing / present" picker for a rule field
-local function ModeButton(p, label, key, modes, anchor, dx)
-  local l = Label(p, label, "GameFontHighlight")
-  l:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", dx or 0, -14)
-  local b = Button(p, "", 200, nil)
-  b:SetPoint("TOPLEFT", l, "BOTTOMLEFT", 0, -4)
-  b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  b:SetScript("OnClick", function(_, mouse)
-    local r = Rule(); if not r then return end
-    local i = 1
-    for k, m in ipairs(modes) do if m[1] == r[key] then i = k end end
-    i = i + (mouse == "RightButton" and -1 or 1)
-    if i < 1 then i = #modes elseif i > #modes then i = 1 end
-    r[key] = modes[i][1]; ui.Refresh(); Changed()
-  end)
-  b.Refresh = function(r) for _, m in ipairs(modes) do if m[1] == r[key] then b:SetText(m[2]) end end end
-  b.label = l
-  return b
-end
-
-
-local function SpellBox(parent, label, key, anchor, hint)
-  local l = Label(parent, label, "GameFontHighlight")
-  l:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -12)
-  local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-  box:SetSize(230, 22); box:SetPoint("TOPLEFT", l, "BOTTOMLEFT", 6, -4)
-  box:SetAutoFocus(false)
-  local function commit(self)
-    local r = Rule()
-    if r then r[key] = strtrim(self:GetText() or ""); ui.Refresh(); Changed() end
-    self:ClearFocus()
-  end
-  box:SetScript("OnEnterPressed", commit)
-  box:SetScript("OnEditFocusLost", commit)
-  box:SetScript("OnEscapePressed", function(self) self:ClearFocus(); ui.Refresh() end)
-  -- drag a spell from your spellbook onto the box
-  box:SetScript("OnReceiveDrag", function(self)
-    local kind, a, b, spellID = GetCursorInfo()
-    local id = (kind == "spell") and (spellID or b) or nil
-    local name = id and ns.SpellName(id)
-    if name then ClearCursor(); self:SetText(name); commit(self) end
-  end)
-  box:HookScript("OnMouseDown", function(self) if GetCursorInfo() then self:GetScript("OnReceiveDrag")(self) end end)
-  if hint then
-    local h = Label(parent, hint, "GameFontDisableSmall")
-    h:SetPoint("LEFT", box, "RIGHT", 8, 0); h:SetWidth(120); h:SetJustifyH("LEFT")
-  end
-  return box
-end
+local UNITS = { { "player", "On me" }, { "target", "On target" } }
+local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" } }
+local MODES = { { "present", "Active" }, { "missing", "Missing" } }
 
 local function BuildEditor(p)
-  local e = {}
-  e.title = Label(p, "Rule", "GameFontNormalLarge")
-  e.title:SetPoint("TOPLEFT", 0, 0)
-  e.enabled = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
-  e.enabled:SetSize(24, 24); e.enabled:SetPoint("LEFT", e.title, "RIGHT", 12, 0)
-  local el = Label(p, "Enabled", "GameFontHighlight"); el:SetPoint("LEFT", e.enabled, "RIGHT", 2, 0)
-  e.enabled:SetScript("OnClick", function(self) local r = Rule(); if r then r.enabled = self:GetChecked() and true or false; ui.Refresh(); Changed() end end)
+  local e = { rows = {} }
 
-  e.spell = SpellBox(p, "Spell to glow (name or ID - or drag it from your spellbook)", "spell", e.title, "every rank")
+  -- header: icon, rule name, enabled
+  e.icon = p:CreateTexture(nil, "ARTWORK")
+  e.icon:SetSize(26, 26); e.icon:SetPoint("TOPLEFT", 0, 0)
+  e.title = UI.Text(p, "title", "")
+  e.title:SetPoint("LEFT", e.icon, "RIGHT", 8, 0); e.title:SetWidth(EW - 140); e.title:SetWordWrap(false)
+  e.enabled = UI.Check(p, "Enabled", Field(Rule, "enabled"), 90, function() ui.Refresh(); Changed() end)
+  e.enabled:SetPoint("TOPRIGHT", p, "TOPLEFT", EW, -3)
 
-  -- Buffs on me: up to 3 rows, all must hold. Each: on me / missing, which buff, at least N stacks.
-  local MAX_BUFF_ROWS = 3
-  local bh = Label(p, "Buffs on me (all must hold)", "GameFontHighlight")
-  bh:SetPoint("TOPLEFT", e.spell, "BOTTOMLEFT", -6, -14)
-  e.buffRows = {}
-  for i = 1, MAX_BUFF_ROWS do
-    local row = CreateFrame("Frame", nil, p)
-    row:SetSize(390, 24)
-    row:SetPoint("TOPLEFT", bh, "BOTTOMLEFT", 0, -4 - (i - 1) * 26)
-    row.mode = Button(row, "", 82, nil)
-    row.mode:SetPoint("LEFT", 0, 0)
-    row.mode:SetScript("OnClick", function()
-      local r = Rule(); local c = r and r.buffs[i]; if not c then return end
-      c.mode = (c.mode == "missing") and "present" or "missing"; ui.Refresh(); Changed()
-    end)
-    row.name = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
-    row.name:SetSize(140, 20); row.name:SetPoint("LEFT", row.mode, "RIGHT", 10, 0); row.name:SetAutoFocus(false)
-    local function commitName(self)
-      local r = Rule(); local c = r and r.buffs[i]
-      if c then c.name = strtrim(self:GetText() or ""); Changed() end
-      self:ClearFocus()
-    end
-    row.name:SetScript("OnEnterPressed", commitName)
-    row.name:SetScript("OnEditFocusLost", commitName)
-    row.name:SetScript("OnReceiveDrag", function(self)
-      local kind, _, b2, spellID = GetCursorInfo()
-      local n = kind == "spell" and ns.SpellName(spellID or b2)
-      if n then ClearCursor(); self:SetText(n); commitName(self) end
-    end)
-    row.ge = Label(row, ">=", "GameFontHighlightSmall"); row.ge:SetPoint("LEFT", row.name, "RIGHT", 8, 0)
-    row.stacks = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
-    row.stacks:SetSize(26, 20); row.stacks:SetPoint("LEFT", row.ge, "RIGHT", 6, 0); row.stacks:SetAutoFocus(false)
-    row.stacks:SetJustifyH("CENTER")
-    local function commitStacks(self)
-      local r = Rule(); local c = r and r.buffs[i]
-      if c then c.stacks = math.max(0, math.min(99, math.floor(tonumber(self:GetText()) or 0))); Changed() end
-      self:ClearFocus(); ui.Refresh()
-    end
-    row.stacks:SetScript("OnEnterPressed", commitStacks)
-    row.stacks:SetScript("OnEditFocusLost", commitStacks)
-    row.st = Label(row, "stacks", "GameFontHighlightSmall"); row.st:SetPoint("LEFT", row.stacks, "RIGHT", 4, 0)
-    row.del = Button(row, "X", 24, function()
-      local r = Rule(); if r then table.remove(r.buffs, i); ui.Refresh(); Changed() end
-    end)
-    row.del:SetPoint("LEFT", row.st, "RIGHT", 8, 0)
-    e.buffRows[i] = row
-  end
-  e.addBuff = Button(p, "+ Add buff condition", 160, function()
-    local r = Rule()
-    if r and #r.buffs < MAX_BUFF_ROWS then
-      table.insert(r.buffs, { mode = "present", name = "", stacks = 0 }); ui.Refresh(); Changed()
-    end
+  -- spell
+  e.secSpell = UI.Section(p, "Spell to glow", EW)
+  e.spell = UI.Edit(p, 230, { function() local r = Rule(); return r and r.spell end,
+    function(v) local r = Rule(); if r then r.spell = v; ui.Refresh(); Changed() end end },
+    "Name or ID", true)
+  e.spellNote = UI.Text(p, "note", "Every rank glows. Type it, or drag it from your spellbook.")
+  e.spellNote:SetWidth(EW - 244)
+
+  -- aura conditions
+  e.secAuras = UI.Section(p, "Buffs and debuffs (all must hold)", EW)
+  e.cdmNote = UI.Text(p, "note",
+    "In combat the game hides auras from addons: add each one to Blizzard's Cooldown Manager " ..
+    "(Tracked Buffs or Tracked Bars) so Spell Glow can follow it. The dot shows if it's tracked.")
+  e.cdmNote:SetWidth(EW)
+  e.none = UI.Text(p, "note", "No buff or debuff conditions yet.")
+  local newName = ""
+  e.newAura = UI.Edit(p, 230, { function() return newName end, function(v) newName = v end },
+    "Buff or debuff: name or ID", true)
+  e.addAura = UI.Button(p, "+ Add", 70, function()
+    local r = Rule(); if not r then return end
+    newName = strtrim(e.newAura:GetText() or "")
+    local c = ns.Copy(ns.NEW_AURA); c.name = newName
+    table.insert(r.auras, c)
+    newName = ""; e.newAura:SetText(""); e.newAura:ClearFocus()
+    ui.Refresh(); Changed()
   end)
-  e.addBuff:SetPoint("TOPLEFT", bh, "BOTTOMLEFT", 0, -4 - MAX_BUFF_ROWS * 26)
-  local bhint = Label(p, "Blank name = the spell itself. Stacks only count for \"on me\" (0 = any).", "GameFontDisableSmall")
-  bhint:SetPoint("LEFT", e.addBuff, "RIGHT", 8, 0); bhint:SetWidth(220); bhint:SetJustifyH("LEFT")
+  e.newAura:SetScript("OnEnterPressed", function() e.addAura:Click() end)
+  e.addNote = UI.Text(p, "note", "Blank = the spell itself.")
 
-  e.tdMode = ModeButton(p, "Debuff on my target", "tdebuff", TDEBUFF_MODES, e.addBuff, 0)
-  e.tdName = SpellBox(p, "Which debuff (blank = the spell itself)", "tdebuffName", e.tdMode, nil)
-  e.tdMine = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
-  e.tdMine:SetSize(24, 24); e.tdMine:SetPoint("TOPLEFT", e.tdName, "BOTTOMLEFT", -6, -4)
-  local ml = Label(p, "Only mine", "GameFontHighlight"); ml:SetPoint("LEFT", e.tdMine, "RIGHT", 2, 0)
-  e.tdMine:SetScript("OnClick", function(self) local r = Rule(); if r then r.tdebuffMine = self:GetChecked() and true or false; Changed() end end)
-  local dl = Label(p, "lasts", "GameFontHighlight"); dl:SetPoint("LEFT", ml, "RIGHT", 18, 0)
-  e.tdDur = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
-  e.tdDur:SetSize(36, 20); e.tdDur:SetPoint("LEFT", dl, "RIGHT", 8, 0); e.tdDur:SetAutoFocus(false)
-  e.tdDur:SetJustifyH("CENTER")
-  local sl = Label(p, "s  (0 = auto)", "GameFontDisableSmall"); sl:SetPoint("LEFT", e.tdDur, "RIGHT", 4, 0)
-  local function commitDur(self)
-    local r = Rule()
-    if r then r.tdebuffDur = math.max(0, math.min(600, tonumber(self:GetText()) or 0)); Changed() end
-    self:SetText(tostring(r and r.tdebuffDur or 0)); self:ClearFocus()
-  end
-  e.tdDur:SetScript("OnEnterPressed", commitDur)
-  e.tdDur:SetScript("OnEditFocusLost", commitDur)
-
-  -- used up by casts: "after [N] cast(s) of [spells]"
-  local ul = Label(p, "Used up after", "GameFontHighlight")
-  ul:SetPoint("TOPLEFT", e.tdMine, "BOTTOMLEFT", 4, -8)
-  e.tdCharges = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
-  e.tdCharges:SetSize(28, 20); e.tdCharges:SetPoint("LEFT", ul, "RIGHT", 8, 0); e.tdCharges:SetAutoFocus(false)
-  e.tdCharges:SetJustifyH("CENTER")
-  local ol = Label(p, "cast(s) of", "GameFontHighlight"); ol:SetPoint("LEFT", e.tdCharges, "RIGHT", 6, 0)
-  local function commitCharges(self)
-    local r = Rule()
-    if r then r.tdebuffCharges = math.max(0, math.min(20, math.floor(tonumber(self:GetText()) or 0))); Changed() end
-    self:SetText(tostring(r and r.tdebuffCharges or 0)); self:ClearFocus()
-  end
-  e.tdCharges:SetScript("OnEnterPressed", commitCharges)
-  e.tdCharges:SetScript("OnEditFocusLost", commitCharges)
-  e.tdUsedBy = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
-  e.tdUsedBy:SetSize(150, 20); e.tdUsedBy:SetPoint("LEFT", ol, "RIGHT", 10, 0); e.tdUsedBy:SetAutoFocus(false)
-  local function commitUsed(self)
-    local r = Rule()
-    if r then r.tdebuffUsedBy = strtrim(self:GetText() or ""); Changed() end
-    self:ClearFocus()
-  end
-  e.tdUsedBy:SetScript("OnEnterPressed", commitUsed)
-  e.tdUsedBy:SetScript("OnEditFocusLost", commitUsed)
-  local uh = Label(p, "0 = not used up. Spells comma-separated; blank = this rule's spell. Only matters in combat.", "GameFontDisableSmall")
-  uh:SetPoint("TOPLEFT", ul, "BOTTOMLEFT", 0, -6); uh:SetWidth(380); uh:SetJustifyH("LEFT")
-  e.tdUsedHint = uh
-
-  e.tbMode = ModeButton(p, "Buff on my target", "tbuff", TDEBUFF_MODES, uh, -4)
-  e.tbName = SpellBox(p, "Which buff (its name or ID)", "tbuffName", e.tbMode, nil)
-
-  e.pdMode = ModeButton(p, "Debuff on me", "pdebuff", BUFF_MODES, e.tbName, -6)
-  e.pdName = SpellBox(p, "Which debuff (its name or ID)", "pdebuffName", e.pdMode, nil)
-
-  local prev = e.pdName
+  -- other conditions
+  e.secOther = UI.Section(p, "Other conditions", EW)
   e.checks = {}
   for i, c in ipairs(CHECKS) do
-    local cb = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
-    cb:SetSize(24, 24)
-    cb:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", i == 1 and -6 or 0, i == 1 and -12 or -2)
-    local l = Label(p, c[2], "GameFontHighlight"); l:SetPoint("LEFT", cb, "RIGHT", 2, 0)
-    cb:SetScript("OnClick", function(self) local r = Rule(); if r then r[c[1]] = self:GetChecked() and true or false; Changed() end end)
-    e.checks[c[1]] = cb
-    prev = cb
+    e.checks[i] = UI.Check(p, c[2], Field(Rule, c[1]), 228, Changed)
   end
-  local allNote = Label(p, "It glows only while ALL checked conditions are true.", "GameFontDisableSmall")
-  allNote:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -6)
 
-  e.status = Label(p, "", "GameFontHighlightSmall")
-  e.status:SetPoint("TOPLEFT", allNote, "BOTTOMLEFT", 0, -12)
-  e.status:SetWidth(380); e.status:SetJustifyH("LEFT")
+  -- status
+  e.secStatus = UI.Section(p, "Right now", EW)
+  e.status = UI.Text(p, "line", "")
+  e.status:SetWidth(EW); e.status:SetSpacing(3)
+
+  -- one aura row (+ a second line for your debuffs on the target)
+  local function Row(i)
+    local row = CreateFrame("Frame", nil, p)
+    row:SetSize(EW, 48)
+    local function A() local r = Rule(); return r and r.auras[i] end
+    local function refresh() ui.Refresh(); Changed() end
+    row.unit = UI.Toggle(row, 76, UNITS, Field(A, "unit"), refresh, "On you or on your target. Click to switch.")
+    row.unit:SetPoint("TOPLEFT", 0, 0)
+    row.kind = UI.Toggle(row, 62, KINDS, Field(A, "kind"), refresh, "A buff or a debuff. Click to switch.")
+    row.kind:SetPoint("LEFT", row.unit, "RIGHT", 4, 0)
+    row.mode = UI.Toggle(row, 66, MODES, Field(A, "mode"), refresh, "Glow while it's active, or while it's missing. Click to switch.")
+    row.mode:SetPoint("LEFT", row.kind, "RIGHT", 4, 0)
+    row.name = UI.Edit(row, 130, { function() local a = A(); return a and a.name end,
+      function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
+    row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
+    row.ge = UI.Text(row, "note", ">=")
+    row.ge:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
+    row.stacks = UI.Edit(row, 28, { function() local a = A(); return a and a.stacks end,
+      function(v) local a = A(); if a then a.stacks = math.max(0, math.min(99, math.floor(tonumber(v) or 0))); refresh() end end },
+      "", false, true)
+    row.stacks:SetPoint("LEFT", row.ge, "RIGHT", 4, 0)
+    row.dot = CreateFrame("Frame", nil, row)
+    row.dot:SetSize(12, 12); row.dot:SetPoint("LEFT", row.stacks, "RIGHT", 8, 0)
+    row.dot.tex = row.dot:CreateTexture(nil, "ARTWORK")
+    row.dot.tex:SetTexture("Interface\\Buttons\\WHITE8X8"); row.dot.tex:SetSize(8, 8); row.dot.tex:SetPoint("CENTER")
+    row.dot:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:SetText(self.tracked and "Tracked in the Cooldown Manager" or "Not in the Cooldown Manager", 1, 1, 1)
+      GameTooltip:AddLine(self.tracked and "Followed in combat." or
+        "In combat Spell Glow can't see it, and the rule won't glow. Add it to the Cooldown Manager's Tracked Buffs or Tracked Bars.", 0.8, 0.8, 0.8, true)
+      GameTooltip:Show()
+    end)
+    row.dot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    row.del = UI.Button(row, "\195\151", 22, function()
+      local r = Rule(); if r then table.remove(r.auras, i); refresh() end
+    end)
+    row.del.tip = "Remove this condition"
+    row.del:SetPoint("LEFT", row.dot, "RIGHT", 6, 0)
+
+    -- second line: your debuff on the target
+    row.mine = UI.Check(row, "Only mine", Field(A, "mine"), 92, refresh)
+    row.mine:SetPoint("TOPLEFT", 18, -26)
+    row.lasts = UI.Text(row, "note", "lasts")
+    row.lasts:SetPoint("LEFT", row.mine, "RIGHT", 2, 0)
+    row.dur = UI.Edit(row, 34, { function() local a = A(); return a and a.dur end,
+      function(v) local a = A(); if a then a.dur = math.max(0, math.min(600, tonumber(v) or 0)); refresh() end end }, "", false, true)
+    row.dur:SetPoint("LEFT", row.lasts, "RIGHT", 4, 0)
+    row.after = UI.Text(row, "note", "s, used up after")
+    row.after:SetPoint("LEFT", row.dur, "RIGHT", 4, 0)
+    row.charges = UI.Edit(row, 28, { function() local a = A(); return a and a.charges end,
+      function(v) local a = A(); if a then a.charges = math.max(0, math.min(20, math.floor(tonumber(v) or 0))); refresh() end end }, "", false, true)
+    row.charges:SetPoint("LEFT", row.after, "RIGHT", 4, 0)
+    row.casts = UI.Text(row, "note", "casts of")
+    row.casts:SetPoint("LEFT", row.charges, "RIGHT", 4, 0)
+    row.usedBy = UI.Edit(row, 104, { function() local a = A(); return a and a.usedBy end,
+      function(v) local a = A(); if a then a.usedBy = v; refresh() end end }, "this spell", false)
+    row.usedBy:SetPoint("LEFT", row.casts, "RIGHT", 4, 0)
+    row.extra = { row.mine, row.lasts, row.dur, row.after, row.charges, row.casts, row.usedBy }
+    for _, w in ipairs(row.extra) do
+      if w.SetScript and w ~= row.mine and w ~= row.lasts and w ~= row.after and w ~= row.casts then end
+    end
+    row.dur.tip = "Backup when it isn't in the Cooldown Manager: how long it lasts after you cast it (0 = auto)."
+    row.Refresh = function()
+      local a = A()
+      if not a then return end
+      local r = Rule()
+      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.stacks, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
+      local stackable = a.mode ~= "missing"
+      row.stacks:SetShown(stackable); row.ge:SetShown(stackable)
+      local tdebuff = a.unit == "target" and a.kind == "debuff"
+      for _, w in ipairs(row.extra) do w:SetShown(tdebuff) end
+      local an = ns.AuraName(r, a)
+      local tracked = an and ns.State.Tracked(an) or false
+      row.dot.tracked = tracked
+      if tracked then row.dot.tex:SetVertexColor(0.35, 0.9, 0.35) else row.dot.tex:SetVertexColor(0.9, 0.3, 0.25) end
+      row:SetHeight(tdebuff and 50 or 26)
+    end
+    return row
+  end
+
+  -- place everything top to bottom; the aura list is as long as it needs to be
+  e.Layout = function()
+    local r = Rule()
+    local y = -40
+    local function place(w, x, dy) w:ClearAllPoints(); w:SetPoint("TOPLEFT", p, "TOPLEFT", x, y); y = y - dy end
+    place(e.secSpell, 0, 30)
+    e.spell:ClearAllPoints(); e.spell:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y)
+    e.spellNote:ClearAllPoints(); e.spellNote:SetPoint("LEFT", e.spell, "RIGHT", 12, 0)
+    y = y - 36
+    place(e.secAuras, 0, 30)
+    place(e.cdmNote, 0, (e.cdmNote:GetStringHeight() or 24) + 10)
+    local n = r and #r.auras or 0
+    e.none:SetShown(n == 0)
+    if n == 0 then place(e.none, 0, 24) end
+    for i = 1, n do
+      local row = e.rows[i] or Row(i)
+      e.rows[i] = row
+      row:Show(); row.Refresh()
+      place(row, 0, row:GetHeight() + 4)
+    end
+    for i = n + 1, #e.rows do e.rows[i]:Hide() end
+    e.newAura:ClearAllPoints(); e.newAura:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y - 2)
+    e.addAura:ClearAllPoints(); e.addAura:SetPoint("LEFT", e.newAura, "RIGHT", 6, 0)
+    e.addNote:ClearAllPoints(); e.addNote:SetPoint("LEFT", e.addAura, "RIGHT", 10, 0)
+    y = y - 40
+    place(e.secOther, 0, 30)
+    for i, cb in ipairs(e.checks) do
+      cb:ClearAllPoints()
+      cb:SetPoint("TOPLEFT", p, "TOPLEFT", (i % 2 == 1) and 0 or 240, y - math.floor((i - 1) / 2) * 24)
+    end
+    y = y - 3 * 24 - 12
+    place(e.secStatus, 0, 30)
+    place(e.status, 0, 0)
+    p:SetHeight(-y + (e.status:GetStringHeight() or 40) + 20)
+  end
 
   e.Refresh = function()
     local r = Rule()
-    for _, w in ipairs({ e.enabled, e.spell, e.addBuff, e.tdMode, e.tdName, e.tdMine, e.tdDur, e.tdCharges, e.tdUsedBy, e.tbMode, e.tbName, e.pdMode, e.pdName }) do w:SetShown(r ~= nil) end
-    for _, cb in pairs(e.checks) do cb:SetShown(r ~= nil) end
-    if not r then e.title:SetText("No rule selected"); e.status:SetText(""); return end
-    e.title:SetText(ns.RuleSpellName(r) or "New rule")
-    e.enabled:SetChecked(r.enabled)
-    if not e.spell:HasFocus() then e.spell:SetText(r.spell or "") end
-    e.tdMode.Refresh(r); e.tbMode.Refresh(r); e.pdMode.Refresh(r)
-    if not e.tbName:HasFocus() then e.tbName:SetText(r.tbuffName or "") end
-    e.tbName:SetEnabled(r.tbuff ~= "ignore")
-    -- buff rows
-    for i, row in ipairs(e.buffRows) do
-      local c = r and r.buffs[i]
-      row:SetShown(c ~= nil)
-      if c then
-        row.mode:SetText(c.mode == "missing" and "MISSING" or "ON me")
-        if not row.name:HasFocus() then row.name:SetText(c.name or "") end
-        if not row.stacks:HasFocus() then row.stacks:SetText(tostring(c.stacks or 0)) end
-        local stackable = c.mode ~= "missing"
-        row.stacks:SetEnabled(stackable); row.ge:SetAlpha(stackable and 1 or 0.4); row.st:SetAlpha(stackable and 1 or 0.4)
-      end
+    local shown = r ~= nil
+    for _, w in ipairs({ e.icon, e.enabled, e.secSpell, e.spell, e.spellNote, e.secAuras, e.cdmNote, e.newAura, e.addAura,
+      e.addNote, e.secOther, e.secStatus, e.status }) do w:SetShown(shown) end
+    for _, cb in ipairs(e.checks) do cb:SetShown(shown) end
+    if not r then
+      e.title:SetText("Add a rule to start")
+      for _, row in ipairs(e.rows) do row:Hide() end
+      e.none:Hide()
+      return
     end
-    e.addBuff:SetEnabled(#r.buffs < #e.buffRows)
-    if not e.tdName:HasFocus() then e.tdName:SetText(r.tdebuffName or "") end
-    if not e.pdName:HasFocus() then e.pdName:SetText(r.pdebuffName or "") end
-    if not e.tdDur:HasFocus() then e.tdDur:SetText(tostring(r.tdebuffDur or 0)) end
-    e.tdMine:SetChecked(r.tdebuffMine)
-    if not e.tdCharges:HasFocus() then e.tdCharges:SetText(tostring(r.tdebuffCharges or 0)) end
-    if not e.tdUsedBy:HasFocus() then e.tdUsedBy:SetText(r.tdebuffUsedBy or "") end
-    e.tdName:SetEnabled(r.tdebuff ~= "ignore"); e.pdName:SetEnabled(r.pdebuff ~= "ignore")
-    for key, cb in pairs(e.checks) do cb:SetChecked(r[key]) end
+    local name = ns.RuleSpellName(r)
+    e.title:SetText(name or "New rule")
+    e.icon:SetTexture(name and ns.SpellIcon(name) or "Interface\\Icons\\INV_Misc_QuestionMark")
+    e.enabled.Refresh(); e.spell.Refresh(); e.newAura.Refresh()
+    for _, cb in ipairs(e.checks) do cb.Refresh() end
+    e.Layout()
   end
 
-  -- live status: is it glowing, why not, how many buttons, can the buff be followed in combat
+  -- live status: glowing or not and why, buttons, how each aura is read right now
+  local HOW = { aura = "read directly", exact = "read directly", hidden = "seen (details hidden)",
+    cdm = "from the Cooldown Manager", ["your cast"] = "from your casts", guess = "last known (not in the Cooldown Manager)",
+    unknown = "hidden in combat" }
   e.UpdateStatus = function()
     local r = Rule()
     if not r then return end
     local name = ns.RuleSpellName(r)
     if not name then e.status:SetText("|cffff6060Type a spell name or ID.|r"); return end
     local lines = {}
-    local on, why = ns.Glow.Evaluate(r)
-    local _, _, gates = ns.Glow.Evaluate(r)
-    if on and gates and #gates > 0 then lines[#lines + 1] = "|cffffd200Now: decided by the game (" .. why .. ")|r"
-    elseif on then lines[#lines + 1] = "|cff60ff60Now: glowing|r"
-    else lines[#lines + 1] = "Now: not glowing - " .. why end
-    local n = ns.Glow.CountButtons(r)
-    lines[#lines + 1] = n > 0 and format("On your action bars: %d button%s", n, n == 1 and "" or "s")
+    local on, why, gates = ns.Glow.Evaluate(r)
+    if on and gates and #gates > 0 then lines[#lines + 1] = "|cffffd200Glowing when the game says so (hidden values)|r"
+    elseif on then lines[#lines + 1] = "|cff60ff60Glowing|r"
+    else lines[#lines + 1] = "Not glowing: " .. why end
+    local nb = ns.Glow.CountButtons(r)
+    lines[#lines + 1] = nb > 0 and format("On your action bars: %d button%s", nb, nb == 1 and "" or "s")
       or "|cffff6060Not on any of Blizzard's action bars.|r"
-    for _, c in ipairs(r.buffs or {}) do
-      local bn = ns.BuffCondName(r, c)
-      if bn then
-        local stackText = ""
-        if c.mode ~= "missing" and (tonumber(c.stacks) or 0) > 1 then
-          local st, src = ns.State.BuffStacks(bn)
-          if ns.isSecret(st) then
-            stackText = ns.curveState == "unsupported" and " - stacks hidden, and this client can't compare them"
-              or " - stacks hidden: the client compares them"
-          elseif st then stackText = format(" - %d of %d stacks", st, c.stacks)
-          else stackText = " - stacks can't be read" end
-        end
-        if ns.State.BuffTracked(bn) then
-          lines[#lines + 1] = "|cff60ff60" .. bn .. ": tracked in the Cooldown Manager, followed in combat" .. stackText .. "|r"
-        else
-          lines[#lines + 1] = "|cffffd200" .. bn .. ": not tracked in Blizzard's Cooldown Manager, so in combat Spell Glow can't see it change. Add it to the Cooldown Manager's Tracked Buffs." .. stackText .. "|r"
-        end
-      end
-    end
-    -- how the debuff conditions are being read right now
-    local HOW = { exact = "read exactly", hidden = "seen (details hidden by the game)",
-      cdm = "|cff60ff60from the Cooldown Manager (exact)|r", ["your cast"] = "from your casts (combat hides it)", unknown = "|cffffd200hidden in combat - can't be checked until it ends|r" }
-    if r.tdebuff ~= "ignore" then
-      local dn = ns.RuleTargetDebuffName(r)
-      local has, how = ns.State.TargetDebuff(dn, r.tdebuffMine, r.tdebuffDur)
-      lines[#lines + 1] = format("Target: %s %s - %s", dn or "?", has and "is on it" or "not seen", HOW[how] or how or "")
-      if dn and not ns.State.Tracked(dn) then
-        lines[#lines + 1] = "|cffffd200Tip: add " .. dn .. " to Blizzard's Cooldown Manager (Tracked Buffs) and it's followed exactly in combat.|r"
-      end
-    end
-    if r.tbuff ~= "ignore" then
-      local bn = ns.RuleTargetBuffName(r)
-      if bn then
-        local has, how = ns.State.TargetBuff(bn)
-        lines[#lines + 1] = format("Target: %s %s - %s", bn, has and "is on it" or "not seen", HOW[how] or how or "")
-      end
-    end
-    if r.pdebuff ~= "ignore" then
-      local dn = ns.RuleMyDebuffName(r)
-      if dn then
-        local has, how = ns.State.MyDebuff(dn)
-        lines[#lines + 1] = format("You: %s %s - %s", dn, has and "is on you" or "not on you", HOW[how] or how or "")
+    for _, a in ipairs(r.auras) do
+      local an = ns.AuraName(r, a)
+      if an then
+        local has, how = ns.State.AuraPresent(a, an)
+        local where = a.unit == "target" and "your target" or "you"
+        local state = has == nil and "|cffffd200can't tell|r" or (has and "on " .. where or "not on " .. where)
+        local cdm = ns.State.Tracked(an) and "|cff60ff60tracked|r" or "|cffff6060not tracked|r"
+        lines[#lines + 1] = format("%s: %s (%s), Cooldown Manager: %s", an, state, HOW[how] or how or "?", cdm)
       end
     end
     e.status:SetText(table.concat(lines, "\n"))
+    e.Layout()
   end
   return e
 end
 
 ---------------------------------------------------------------------------
--- Rules list (left side)
+-- Rules list
 ---------------------------------------------------------------------------
 local rows = {}
 local function BuildList(p)
   local l = {}
-  l.title = Label(p, "Rules", "GameFontNormalLarge"); l.title:SetPoint("TOPLEFT", 0, 0)
+  local sec = UI.Section(p, "Rules", LIST_W); sec:SetPoint("TOPLEFT", 0, 0)
   l.box = CreateFrame("Frame", nil, p, "BackdropTemplate")
-  l.box:SetPoint("TOPLEFT", l.title, "BOTTOMLEFT", 0, -8); l.box:SetSize(190, 300)
-  l.box:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-  l.box:SetBackdropColor(0, 0, 0, 0.5)
-  l.scroll = CreateFrame("ScrollFrame", nil, l.box)
-  l.scroll:SetPoint("TOPLEFT", 6, -6); l.scroll:SetPoint("BOTTOMRIGHT", -6, 6)
-  l.content = CreateFrame("Frame", nil, l.scroll); l.content:SetSize(178, 1)
-  l.scroll:SetScrollChild(l.content)
-  l.scroll:EnableMouseWheel(true)
-  l.scroll:SetScript("OnMouseWheel", function(self, d)
-    local max = math.max(0, l.content:GetHeight() - self:GetHeight())
-    self:SetVerticalScroll(math.max(0, math.min(max, self:GetVerticalScroll() - d * 40)))
-  end)
+  l.box:SetPoint("TOPLEFT", 0, -32); l.box:SetSize(LIST_W, 360)
+  l.box:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+  UI.Skin(function(th) l.box:SetBackdropColor(0, 0, 0, 0.35); l.box:SetBackdropBorderColor(UI.RGB(th.accent, 0.6)) end)
+  local scroll, content = UI.Scroll(l.box, LIST_W - 8, 352)
+  scroll:SetPoint("TOPLEFT", 4, -4)
+  l.content, l.scroll = content, scroll
 
-  l.add = Button(p, "Add rule", 92, function()
+  l.add = UI.Button(p, "+ Add rule", 96, function()
     table.insert(ns.db.rules, ns.Copy(ns.NEW_RULE))
     selected = #ns.db.rules; ui.Refresh(); Changed()
   end)
   l.add:SetPoint("TOPLEFT", l.box, "BOTTOMLEFT", 0, -8)
-  l.remove = Button(p, "Remove", 92, function()
+  l.remove = UI.Button(p, "Remove", 96, function()
     if ns.db.rules[selected] then
       table.remove(ns.db.rules, selected)
       selected = math.max(1, math.min(selected, #ns.db.rules)); ui.Refresh(); Changed()
     end
   end)
-  l.remove:SetPoint("LEFT", l.add, "RIGHT", 6, 0)
+  l.remove:SetPoint("LEFT", l.add, "RIGHT", 4, 0)
 
   l.Refresh = function()
+    local th = UI.Theme()
     for i, r in ipairs(ns.db.rules) do
       local row = rows[i]
       if not row then
-        row = CreateFrame("Button", nil, l.content)
-        row:SetSize(178, 24)
-        row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+        row = CreateFrame("Button", nil, content)
+        row:SetSize(LIST_W - 18, 26)
         row.sel = row:CreateTexture(nil, "BACKGROUND"); row.sel:SetAllPoints()
-        row.sel:SetColorTexture(1, 0.82, 0, 0.25)
-        row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(20, 20); row.icon:SetPoint("LEFT", 2, 0)
-        row.text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-        row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0); row.text:SetPoint("RIGHT", -4, 0)
-        row.text:SetJustifyH("LEFT"); row.text:SetWordWrap(false)
+        row.bar = row:CreateTexture(nil, "ARTWORK"); row.bar:SetWidth(2)
+        row.bar:SetPoint("TOPLEFT"); row.bar:SetPoint("BOTTOMLEFT")
+        row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(20, 20); row.icon:SetPoint("LEFT", 6, 0)
+        row.text = UI.Text(row, "line", "")
+        row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0); row.text:SetPoint("RIGHT", -4, 0); row.text:SetWordWrap(false)
+        row:SetScript("OnEnter", function(self) self.hover = true; l.Refresh() end)
+        row:SetScript("OnLeave", function(self) self.hover = false; l.Refresh() end)
         rows[i] = row
       end
-      row:SetPoint("TOPLEFT", 0, -(i - 1) * 24)
+      row:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
       local name = ns.RuleSpellName(r)
       row.icon:SetTexture(name and ns.SpellIcon(name) or "Interface\\Icons\\INV_Misc_QuestionMark")
+      row.icon:SetDesaturated(not r.enabled)
       row.text:SetText(name or "(no spell)")
-      row.text:SetTextColor(r.enabled and 1 or 0.5, r.enabled and 1 or 0.5, r.enabled and 1 or 0.5)
-      row.sel:SetShown(i == selected)
+      local on = (i == selected)
+      local c = on and th.title or (row.hover and th.hover or (r.enabled and th.line or th.dim))
+      row.text:SetTextColor(UI.RGB(c))
+      row.sel:SetColorTexture(UI.RGB(th.box, on and 0.45 or (row.hover and 0.2 or 0)))
+      row.bar:SetColorTexture(UI.RGB(th.title)); row.bar:SetShown(on)
       row:SetScript("OnClick", function() selected = i; ui.Refresh() end)
       row:Show()
     end
     for i = #ns.db.rules + 1, #rows do rows[i]:Hide() end
-    l.content:SetHeight(math.max(1, #ns.db.rules * 24))
+    content:SetHeight(math.max(1, #ns.db.rules * 26))
+    l.remove.SetActive(ns.db.rules[selected] ~= nil)
+    scroll.Update()
   end
   return l
 end
 
 ---------------------------------------------------------------------------
--- Window
+-- Pages
 ---------------------------------------------------------------------------
-local function Slider(parent, label, minV, maxV, step, key, fmt, anchor)
-  local text = Label(parent, "", "GameFontHighlight")
-  text:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -12)
-  local s = CreateFrame("Slider", nil, parent, "BackdropTemplate")
-  s:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -6); s:SetSize(180, 16)
-  s:SetOrientation("HORIZONTAL"); s:SetMinMaxValues(minV, maxV); s:SetValueStep(step); s:SetObeyStepOnDrag(true)
-  s:SetBackdrop({ bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
-    edgeFile = "Interface\\Buttons\\UI-SliderBar-Border", tile = true, tileSize = 8, edgeSize = 8,
-    insets = { left = 3, right = 3, top = 6, bottom = 6 } })
-  s:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
-  s:SetScript("OnValueChanged", function(_, v)
-    v = math.floor(v / step + 0.5) * step
-    ns.db[key] = v; text:SetText(label .. ": " .. fmt(v)); Changed()
+local refreshers = {}
+local function track(w) refreshers[#refreshers + 1] = w; return w end
+
+local function PageRules(pg)
+  local left = CreateFrame("Frame", nil, pg); left:SetPoint("TOPLEFT"); left:SetSize(LIST_W, PAGE_H)
+  local list = BuildList(left)
+  local scroll, content = UI.Scroll(pg, EDIT_W, PAGE_H)
+  scroll:SetPoint("TOPLEFT", EDIT_X, 0)
+  local editor = BuildEditor(content)
+  ui = { Refresh = function() list.Refresh(); editor.Refresh(); editor.UpdateStatus(); scroll.Update() end,
+    Status = function() editor.UpdateStatus(); scroll.Update() end }
+end
+
+local function PageLook(pg)
+  local function pct(v) return math.floor(v * 100 + 0.5) .. "%" end
+  local function S(key) return { function() return ns.db[key] end, function(v) ns.db[key] = v end } end
+  local sec = UI.Section(pg, "Glow", 330); sec:SetPoint("TOPLEFT", 0, 0)
+  track(UI.Slider(pg, "Size", 320, 1, 2, 0.05, S("glowScale"), pct, Changed)):SetPoint("TOPLEFT", 0, -32)
+  track(UI.Slider(pg, "Intensity", 320, 0.2, 1, 0.05, S("glowAlpha"), pct, Changed)):SetPoint("TOPLEFT", 0, -74)
+
+  local sec2 = UI.Section(pg, "When it starts", 330); sec2:SetPoint("TOPLEFT", 0, -124)
+  local STYLES = {
+    { "glow", "Just the glow", "Fades straight into the glow." },
+    { "shine", "Glow + shine", "Flares brighter for a moment, then settles." },
+    { "burst", "Blizzard burst", "Blizzard's proc start: grows past the button." },
+  }
+  for i, st in ipairs(STYLES) do
+    local cb = track(UI.Check(pg, st[2], { function() return ns.db.glowStyle == st[1] end,
+      function() ns.db.glowStyle = st[1] end }, 150, function() ns.Glow.Test(3); for _, w in ipairs(refreshers) do w.Refresh() end end))
+    cb:SetPoint("TOPLEFT", 0, -156 - (i - 1) * 26)
+    UI.Text(pg, "note", st[3]):SetPoint("LEFT", cb, "RIGHT", 4, 0)
+  end
+  UI.Button(pg, "Test glow (3 s)", 140, function() ns.Glow.Test(3) end):SetPoint("TOPLEFT", 0, -244)
+
+  local sec3 = UI.Section(pg, "Timing", 330); sec3:SetPoint("TOPLEFT", 370, 0)
+  track(UI.Slider(pg, "A melee hit on me counts for", 330, 1, 10, 1, S("meleeWindow"),
+    function(v) return v .. " s" end, Changed)):SetPoint("TOPLEFT", 370, -32)
+  UI.Text(pg, "note", "Used by the \"Being attacked in melee\" condition."):SetPoint("TOPLEFT", 370, -72)
+
+  local sec4 = UI.Section(pg, "Window style", 330); sec4:SetPoint("TOPLEFT", 370, -124)
+  track(UI.Check(pg, "FlareUI style (needs FlareUI)", { function() return ns.db.flareStyle end,
+    function(v) ns.db.flareStyle = v end }, 300, function() UI.Restyle(); if ui then ui.Refresh() end end)):SetPoint("TOPLEFT", 370, -156)
+end
+
+local function PageHelp(pg)
+  local y = 0
+  local function sec(t) local s = UI.Section(pg, t, 700); s:SetPoint("TOPLEFT", 0, y); y = y - 32 end
+  local function para(t, color)
+    local fs = UI.Text(pg, color or "line", t); fs:SetWidth(700); fs:SetPoint("TOPLEFT", 0, y)
+    y = y - (fs:GetStringHeight() or 14) - 8
+  end
+  sec("How rules work")
+  para("A rule glows a spell on your action bars while ALL of its conditions hold. Add as many buffs and debuffs as you like: " ..
+    "each one says who has it (you or your target), whether it's a buff or a debuff, and whether it must be active or missing.")
+  para("Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you with at least 5 stacks, " ..
+    "and Flame Shock is on your target.", "note")
+  sec("The Cooldown Manager is required in combat")
+  para("In combat, the game hides buffs and debuffs from addons. Spell Glow follows them through Blizzard's Cooldown Manager instead, " ..
+    "so turn it on and add every buff and debuff your rules use to its Tracked Buffs or Tracked Bars. " ..
+    "A green dot next to a condition means it's tracked; red means the rule can't see it in combat and won't glow.")
+  para("The Cooldown Manager only tracks your own spells' auras. Auras that other players put on you or your target " ..
+    "(for example another player's curse) can only be checked out of combat.", "note")
+  local cdm = UI.Text(pg, "line", ""); cdm:SetPoint("TOPLEFT", 0, y); y = y - 26
+  sec("Commands")
+  para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
+    "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)")
+  pg:SetScript("OnShow", function()
+    local on = GetCVarBool and GetCVarBool("cooldownViewerEnabled")
+    cdm:SetText(on and "|cff60ff60Cooldown Manager: on|r" or "|cffff6060Cooldown Manager: off. Turn it on in Options > Gameplay Enhancements.|r")
   end)
-  s.Refresh = function() s:SetValue(ns.db[key]); text:SetText(label .. ": " .. fmt(ns.db[key])) end
-  return s
 end
 
 local function BuildWindow()
-  win = CreateFrame("Frame", "SpellGlowWindow", UIParent, "BackdropTemplate")
-  win:SetSize(680, 1040); win:SetPoint("CENTER"); win:SetFrameStrata("DIALOG")
-  win:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 32,
-    insets = { left = 11, right = 12, top = 12, bottom = 11 } })
-  win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton")
-  win:SetScript("OnDragStart", win.StartMoving); win:SetScript("OnDragStop", win.StopMovingOrSizing)
-  win:SetClampedToScreen(true)
-  tinsert(UISpecialFrames, "SpellGlowWindow")
-  local close = CreateFrame("Button", nil, win, "UIPanelCloseButton"); close:SetPoint("TOPRIGHT", -6, -6)
-  local title = Label(win, "Spell Glow", "GameFontNormalLarge"); title:SetPoint("TOPLEFT", 24, -20)
-  local sub = Label(win, "Retail-style glow on your action bar spells, when your conditions are met.", "GameFontDisableSmall")
-  sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+  win = UI.Window("SpellGlowWindow", 760, 580)
+  win:SetPoint("CENTER")
+  local title = UI.Text(win, "title", "Spell Glow")
+  title:SetPoint("TOPLEFT", 26, -20)
+  UI.Text(win, "note", "Custom procs: glow any spell when your conditions are met."):SetPoint("LEFT", title, "RIGHT", 10, -1)
+  UI.Tabs(win, { { "Rules", PageRules }, { "Look", PageLook }, { "Help", PageHelp } }, 26, -66, 708, PAGE_H)
 
-  local left = CreateFrame("Frame", nil, win); left:SetPoint("TOPLEFT", 24, -64); left:SetSize(200, 400)
-  local right = CreateFrame("Frame", nil, win); right:SetPoint("TOPLEFT", 250, -64); right:SetSize(400, 960)
-  local list, editor = BuildList(left), BuildEditor(right)
-
-  local melee = Slider(left, "Melee hit counts for", 1, 10, 1, "meleeWindow", function(v) return v .. " s" end, list.add)
-  local size = Slider(left, "Glow size", 1, 2, 0.05, "glowScale", function(v) return math.floor(v * 100 + 0.5) .. "%" end, melee)
-  local intensity = Slider(left, "Glow intensity", 0.2, 1, 0.05, "glowAlpha", function(v) return math.floor(v * 100 + 0.5) .. "%" end, size)
-
-  -- how the glow starts: click to cycle, right-click to go back
-  local STYLES = { { "glow", "Just the glow" }, { "shine", "Glow + shine" }, { "burst", "Blizzard burst (zoom)" } }
-  local styleLabel = Label(left, "When it starts", "GameFontHighlight")
-  styleLabel:SetPoint("TOPLEFT", intensity, "BOTTOMLEFT", 0, -12)
-  local style = Button(left, "", 180, nil)
-  style:SetPoint("TOPLEFT", styleLabel, "BOTTOMLEFT", 0, -6)
-  style:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  local styleHint = Label(left, "", "GameFontDisableSmall")
-  styleHint:SetPoint("TOPLEFT", style, "BOTTOMLEFT", 0, -4); styleHint:SetWidth(190); styleHint:SetJustifyH("LEFT")
-  local HINTS = { glow = "Fades straight into the glow.", shine = "Flares brighter for a moment, then settles.",
-    burst = "Blizzard's proc start: grows past the button." }
-  function style.Refresh()
-    for _, st in ipairs(STYLES) do
-      if st[1] == ns.db.glowStyle then style:SetText(st[2]); styleHint:SetText(HINTS[st[1]]) end
-    end
-  end
-  style:SetScript("OnClick", function(_, mouse)
-    local i = 1
-    for k, st in ipairs(STYLES) do if st[1] == ns.db.glowStyle then i = k end end
-    i = (mouse == "RightButton") and (i - 2) % #STYLES + 1 or i % #STYLES + 1
-    ns.db.glowStyle = STYLES[i][1]; style.Refresh(); ns.Glow.Test(3)
-  end)
-
-  local test = Button(left, "Test glow (3 s)", 180, function() ns.Glow.Test(3) end)
-  test:SetPoint("TOPLEFT", styleHint, "BOTTOMLEFT", 0, -14)
-
-  ui = { Refresh = function() list.Refresh(); editor.Refresh(); editor.UpdateStatus() end }
   win:SetScript("OnShow", function(self)
-    -- shrink to fit smaller screens (the window is tall)
     local fit = (UIParent:GetHeight() - 40) / self:GetHeight()
     self:SetScale(math.max(0.5, math.min(1, fit)))
-    melee.Refresh(); size.Refresh(); intensity.Refresh(); style.Refresh(); ui.Refresh()
+    for _, w in ipairs(refreshers) do w.Refresh() end
+    ui.Refresh()
   end)
   local t = 0
-  win:SetScript("OnUpdate", function(_, dt) t = t + dt; if t > 0.5 then t = 0; editor.UpdateStatus() end end)
+  win:SetScript("OnUpdate", function(_, dt) t = t + dt; if t > 0.5 then t = 0; ui.Status() end end)
   win:Hide()
 end
 
 function ns.OpenOptions()
-  if not win then BuildWindow() end
+  if not win then
+    local ok, e = pcall(BuildWindow)
+    if not ok then if win then win:Hide() end; win = nil; ns.Print("settings failed: " .. tostring(e)); return end
+  end
+  UI.Restyle()
   win:SetShown(not win:IsShown())
 end
 
@@ -487,7 +434,12 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     pcall(function()
       if Settings and Settings.RegisterCanvasLayoutCategory then
         local p = CreateFrame("Frame"); p.name = "Spell Glow"
-        local b = Button(p, "Open Spell Glow", 180, function() ns.OpenOptions() end); b:SetPoint("TOPLEFT", 16, -16)
+        local b = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
+        b:SetSize(180, 22); b:SetText("Open Spell Glow"); b:SetPoint("TOPLEFT", 16, -16)
+        b:SetScript("OnClick", function()
+          if SettingsPanel and SettingsPanel.Close then pcall(SettingsPanel.Close, SettingsPanel, true) end
+          if not (win and win:IsShown()) then ns.OpenOptions() end
+        end)
         Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(p, p.name))
       end
     end)

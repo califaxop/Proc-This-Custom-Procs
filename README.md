@@ -5,33 +5,37 @@ SpellGlow: Custom Procs puts Blizzard's own retail spell-alert glow on any spell
 
 Features
 - Rules: one spell each, every rank matched by name, typed in or dragged from your spellbook.
-- Conditions per rule, all required:
-  - Buffs on me: up to 3 rows, each "on me" or "missing", with an optional minimum stack count.
-  - Debuff on my target: on it or missing, only mine, with a duration and "used up after N casts of" spells.
-  - Buff on my target and Debuff on me: on or missing.
-  - Being attacked in melee (hit, dodged, parried or blocked in the last few seconds).
-  - Castable (known, enough mana), off cooldown (global cooldown ignored), I have control (not stunned), only in combat, the game flags it as a proc.
+- Buffs and debuffs, as many as you need, all must hold. Each one sets:
+  - who has it: on me or on target
+  - buff or debuff
+  - active or missing, with an optional minimum stack count
+  - for your debuffs on a target: only mine, and a backup from your casts (how long it lasts, used up after N casts of chosen spells)
+- Other conditions: being attacked in melee, castable (known, enough mana), off cooldown (global cooldown ignored), I have control (not stunned), only in combat, the game flags it as a proc.
+- Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, and Flame Shock is on your target.
+- Combat-aware: follows buffs, debuffs and stack counts through Blizzard's Cooldown Manager; each condition shows whether it's tracked there.
 - Glow style: just the glow, glow + a brief shine when it starts, or Blizzard's zoom-in burst; adjustable size and intensity.
-- Combat-aware: reads Blizzard's Cooldown Manager for buffs, debuffs and stack counts it tracks, and your own casts as a backup.
-- Live status per rule: glowing or not, and why; how many buttons have the spell; whether each aura is followed in combat.
+- Live status per rule: glowing or not, and why; how many buttons have the spell; how each buff and debuff is being read.
+- Settings window in the same style as XP Planner (FlareUI's when installed), with Rules, Look and Help tabs.
 - Starter rule included: Lightning Shield glows when it is missing, you are being hit in melee, and you can cast it.
 
 Settings and commands
-- /spellglow or /sglow: the rules window (add, edit, remove rules; melee window 1-10 s; glow size, intensity and start style; test).
+- /spellglow or /sglow: the settings window (Rules, Look, Help).
 - /sglow test: show every rule's glow for 3 seconds.
 - /sglow auras: list your target's and your own buffs and debuffs with spell IDs (out of combat).
 - Esc > Options > AddOns > Spell Glow.
 
 Requirements
 - WoW: Forever (client 16001). No other addons required.
-- For in-combat buff, debuff and stack tracking: add those auras to Blizzard's Cooldown Manager (Tracked Buffs).
+- Blizzard's Cooldown Manager turned on, with every buff and debuff your rules use added to its Tracked Buffs or Tracked Bars. In combat the game hides auras from addons; the Cooldown Manager is how Spell Glow follows them.
 
 Known limits
 - Forever hides auras from addons in combat. Auras not tracked in the Cooldown Manager fall back to your casts (your own debuffs) or can't be checked (others' auras), and those rules don't glow.
 - Comparing a hidden stack count relies on a client function not yet confirmed on Forever; the rule's status says whether it works.
 - A dodged or parried application can't be detected unless the debuff is tracked in the Cooldown Manager.
+- The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
+- 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.
 - 1.6.0: Choose how the glow starts (just the glow, glow + shine, or Blizzard's zoom-in burst) and its intensity.
 - 1.5.1: Logo in the AddOns list.
