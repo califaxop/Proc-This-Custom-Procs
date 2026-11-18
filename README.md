@@ -31,12 +31,12 @@ Requirements
 
 Known limits
 - Forever hides auras from addons in combat. Auras not tracked in the Cooldown Manager fall back to your casts (your own debuffs) or can't be checked (others' auras), and those rules don't glow.
-- Stack counts aren't supported (Forever hides them from addons in combat, in the aura data and on the Cooldown Manager icon), except Maelstrom Weapon, worked out from Lightning Bolt's cast time; haste effects can make that read a stack high.
+- Stack counts aren't supported (Forever hides them from addons in combat, in the aura data and on the Cooldown Manager icon), except Maelstrom Weapon, worked out from Lightning Bolt's cast time with your spell haste taken into account.
 - A dodged or parried application can't be detected unless the debuff is tracked in the Cooldown Manager.
 - The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
-- 1.7.2: AND / OR between buff and debuff conditions (rows joined by OR form a group where any one is enough). Stack counts removed (Forever hides them from addons in combat), except Maelstrom Weapon: its stacks are worked out from Lightning Bolt's cast time and compared as at least, more than, exactly, at most or less than. /sglow mw shows the reading.
+- 1.7.2: AND / OR between buff and debuff conditions (rows joined by OR form a group where any one is enough). Stack counts removed (Forever hides them from addons in combat), except Maelstrom Weapon: its stacks are worked out from Lightning Bolt's cast time (haste taken into account) and compared as at least, more than, exactly, at most or less than. /sglow mw shows the reading.
 - 1.7.1: Spells cast from macros now glow (the macro's spell wasn't recognized on newer clients); macros with conditions follow the spell they'd cast right now.
 - 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.

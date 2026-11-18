@@ -525,9 +525,10 @@ end
 local function ShowMaelstrom()
   local ct = ns.State.BoltCastTime()
   local st, how = ns.State.MaelstromStacks()
-  ns.Print(format("Maelstrom Weapon%s: Lightning Bolt cast time %s, base %s -> %s stacks (%s)",
+  local h = ns.State.Haste()
+  ns.Print(format("Maelstrom Weapon%s: Lightning Bolt cast time %s, 0-stack cast time now %s ms, spell haste %s -> %s stacks (%s)",
     InCombatLockdown() and " (in combat)" or "", ct and (ct .. " ms") or "hidden",
-    tostring(ns.State.BoltBase() or "not learned yet (2500)"), tostring(st or "?"), tostring(how)))
+    tostring(ns.State.BoltBase()), h and (math.floor(h * 100 + 0.5) .. "%") or "unknown", tostring(st or "?"), tostring(how)))
 end
 
 SlashCmdList.SPELLGLOW = function(msg)

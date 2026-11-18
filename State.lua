@@ -265,34 +265,52 @@ local function BoltCastTime()
   return ct
 end
 
-local boltBase -- Lightning Bolt's cast time with no Maelstrom stacks (ms)
-function S.MaelstromStacks()
-  local ct = BoltCastTime()
-  if not ct then return nil, "cast time hidden" end
-  local mw = ns.SpellName(408505) or "Maelstrom Weapon"
-  local has = S.HasBuff(mw)
-  if not has then
-    if ct > 0 then boltBase = ct end -- no stacks: this is the base cast time
-    return 0, "no Maelstrom Weapon"
-  end
-  local base = (SpellGlowDB and SpellGlowDB.boltBase) or boltBase or 2500
-  if boltBase and SpellGlowDB then SpellGlowDB.boltBase = boltBase end
-  if ct <= 0 then return 5, "instant" end
-  local n = math.floor((1 - ct / base) / 0.2 + 0.5)
-  return math.max(1, math.min(5, n)), format("%d ms of %d", ct, base)
-end
 S.BoltCastTime = BoltCastTime
--- learn the 0-stack cast time whenever Maelstrom Weapon isn't on you (called on every update)
+
+-- Your spell haste as a fraction (0.3 = 30%), or nil if the game won't say. Cast times are
+-- base / (1 + haste), so taking it out makes the reading immune to haste buffs.
+local function Haste()
+  if not UnitSpellHaste then return nil end
+  local ok, h = pcall(UnitSpellHaste, "player")
+  if not ok or type(h) ~= "number" or isSecret(h) then return nil end
+  return h / 100
+end
+S.Haste = Haste
+
+-- Lightning Bolt's cast time with no Maelstrom stacks and no haste (ms): learned whenever Maelstrom
+-- Weapon isn't on you, with the haste you had then taken out.
+local boltRaw
+local function RawBase()
+  return boltRaw or (SpellGlowDB and SpellGlowDB.boltRaw) or 2500
+end
+
+-- called on every update
 function S.LearnBoltBase()
   local ct = BoltCastTime()
   if not ct or ct <= 0 then return end
   local mw = ns.SpellName(408505) or "Maelstrom Weapon"
   if not S.HasBuff(mw) then
-    boltBase = ct
-    if SpellGlowDB then SpellGlowDB.boltBase = ct end
+    boltRaw = ct * (1 + (Haste() or 0))
+    if SpellGlowDB then SpellGlowDB.boltRaw = boltRaw end
   end
 end
-S.BoltBase = function() return (SpellGlowDB and SpellGlowDB.boltBase) or boltBase end
+
+-- Maelstrom Weapon stacks (0-5) from Lightning Bolt's cast time, haste taken into account.
+function S.MaelstromStacks()
+  local ct = BoltCastTime()
+  if not ct then return nil, "cast time hidden" end
+  local mw = ns.SpellName(408505) or "Maelstrom Weapon"
+  if not S.HasBuff(mw) then return 0, "no Maelstrom Weapon" end
+  if ct <= 0 then return 5, "instant" end
+  local h = Haste()
+  local expected = RawBase() / (1 + (h or 0)) -- what it would cast at with 0 stacks right now
+  local n = math.floor((1 - ct / expected) / 0.2 + 0.5)
+  local note = format("%d ms of %d", ct, math.floor(expected + 0.5))
+  if h and h > 0 then note = note .. format(", %d%% haste", math.floor(h * 100 + 0.5)) end
+  if not h then note = note .. ", haste unknown" end
+  return math.max(1, math.min(5, n)), note
+end
+S.BoltBase = function() return math.floor(RawBase() / (1 + (Haste() or 0)) + 0.5) end
 
 ---------------------------------------------------------------------------
 -- Being attacked in melee: any hit, dodge, parry, block or miss on you recently.
