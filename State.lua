@@ -244,6 +244,57 @@ function S.AuraStacks(a, name)
 end
 
 ---------------------------------------------------------------------------
+-- Maelstrom Weapon stacks, worked out from Lightning Bolt's cast time: each stack cuts it by 20%
+-- (instant at 5). Forever hides the stack count itself in combat, but the cast time stays readable.
+-- The 0-stack cast time is learned whenever Maelstrom Weapon isn't on you.
+---------------------------------------------------------------------------
+local MW_IDS = { 408505, 53817, 51530, 65986 }
+function S.IsMaelstrom(name)
+  if name == "Maelstrom Weapon" then return true end
+  for _, id in ipairs(MW_IDS) do if name and ns.SpellName(id) == name then return true end end
+  return false
+end
+
+local function BoltCastTime()
+  if not (C_Spell and C_Spell.GetSpellInfo) then return nil end
+  local bolt = ns.SpellName(403) or "Lightning Bolt"
+  local ok, info = pcall(C_Spell.GetSpellInfo, bolt)
+  if not ok or type(info) ~= "table" then return nil end
+  local okT, ct = pcall(function() return info.castTime end)
+  if not okT or type(ct) ~= "number" or isSecret(ct) then return nil end
+  return ct
+end
+
+local boltBase -- Lightning Bolt's cast time with no Maelstrom stacks (ms)
+function S.MaelstromStacks()
+  local ct = BoltCastTime()
+  if not ct then return nil, "cast time hidden" end
+  local mw = ns.SpellName(408505) or "Maelstrom Weapon"
+  local has = S.HasBuff(mw)
+  if not has then
+    if ct > 0 then boltBase = ct end -- no stacks: this is the base cast time
+    return 0, "no Maelstrom Weapon"
+  end
+  local base = (SpellGlowDB and SpellGlowDB.boltBase) or boltBase or 2500
+  if boltBase and SpellGlowDB then SpellGlowDB.boltBase = boltBase end
+  if ct <= 0 then return 5, "instant" end
+  local n = math.floor((1 - ct / base) / 0.2 + 0.5)
+  return math.max(1, math.min(5, n)), format("%d ms of %d", ct, base)
+end
+S.BoltCastTime = BoltCastTime
+-- learn the 0-stack cast time whenever Maelstrom Weapon isn't on you (called on every update)
+function S.LearnBoltBase()
+  local ct = BoltCastTime()
+  if not ct or ct <= 0 then return end
+  local mw = ns.SpellName(408505) or "Maelstrom Weapon"
+  if not S.HasBuff(mw) then
+    boltBase = ct
+    if SpellGlowDB then SpellGlowDB.boltBase = ct end
+  end
+end
+S.BoltBase = function() return (SpellGlowDB and SpellGlowDB.boltBase) or boltBase end
+
+---------------------------------------------------------------------------
 -- Being attacked in melee: any hit, dodge, parry, block or miss on you recently.
 -- (If the game hides what kind of event it was, it still counts.)
 ---------------------------------------------------------------------------

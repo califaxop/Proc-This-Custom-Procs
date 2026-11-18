@@ -77,6 +77,20 @@ local function GlowFrame(b)
   return glow
 end
 
+-- A stack condition as the range it allows: lo = fewest stacks, hi = most (nil = no limit).
+-- An active aura has at least 1 stack, so "at least 0/1" is no limit at all.
+local CMP_TEXT = { ge = "at least", gt = "more than", le = "at most", lt = "less than" }
+G.CMP_TEXT = CMP_TEXT
+function G.StackRange(a)
+  local n = math.floor(tonumber(a.stacks) or 0)
+  local cmp = a.cmp or "ge"
+  if cmp == "ge" then return (n > 1) and n or nil, nil end
+  if cmp == "gt" then return (n + 1 > 1) and n + 1 or nil, nil end
+  if cmp == "le" then return nil, n end
+  if cmp == "lt" then return nil, n - 1 end
+  return nil, nil
+end
+
 -- set one gate from a hidden value; false if the client can't do it
 local function SetGate(g, gate)
   if gate.kind == "bool" then
@@ -190,6 +204,19 @@ function G.Evaluate(rule)
       if has then return false, format("%s is on %s", an, who) end
     else
       if not has then return false, format("%s is not on %s", an, who) end
+      -- Maelstrom Weapon only: its stack count, from Lightning Bolt's cast time
+      if S.IsMaelstrom(an) and a.unit ~= "target" and a.kind ~= "debuff" and a.match ~= "type" then
+        local lo, hi = G.StackRange(a)
+        if lo or hi then
+          local st = S.MaelstromStacks()
+          if st == nil then return false, "can't tell Maelstrom Weapon's stacks (Lightning Bolt's cast time is hidden)" end
+          local need = format("%s %d", G.CMP_TEXT[a.cmp or "ge"] or "at least", tonumber(a.stacks) or 0)
+          if hi and hi < 1 then return false, format("%s: never true while it's active (%s stacks)", an, need) end
+          if (lo and st < lo) or (hi and st > hi) then
+            return false, format("%s: %d stacks (needs %s)", an, st, need)
+          end
+        end
+      end
     end
   end
   if rule.proc and not S.Flagged(name) then return false, "not flagged as a proc" end
@@ -212,6 +239,7 @@ function G.Test(seconds)
 end
 
 function G.Update()
+  pcall(S.LearnBoltBase) -- Lightning Bolt's cast time without Maelstrom Weapon (for its stack count)
   -- per spell: "plain" (glow), a gates list (the client decides), or nothing
   local verdict = {}
   local testing = GetTime() < testUntil

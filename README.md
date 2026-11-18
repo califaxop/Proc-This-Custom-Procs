@@ -8,7 +8,7 @@ Features
 - Buffs and debuffs, as many as you need, all must hold. Each one sets:
   - who has it: on me or on target
   - buff or debuff
-  - active or missing
+  - active or missing (Maelstrom Weapon also has a stack check: at least, more than, at most or less than)
   - for your debuffs on a target: only mine, and a backup from your casts (how long it lasts, used up after N casts of chosen spells)
 - Other conditions: being attacked in melee, castable (known, enough mana), off cooldown (global cooldown ignored), I have control (not stunned), only in combat, the game flags it as a proc.
 - Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, and Flame Shock is on your target.
@@ -22,6 +22,7 @@ Settings and commands
 - /spellglow or /sglow: the settings window (Rules, Look, Help).
 - /sglow test: show every rule's glow for 3 seconds.
 - /sglow auras: list your target's and your own buffs and debuffs with spell IDs (out of combat).
+- /sglow mw: Maelstrom Weapon stacks as Spell Glow reads them from Lightning Bolt's cast time.
 - Esc > Options > AddOns > Spell Glow.
 
 Requirements
@@ -30,12 +31,12 @@ Requirements
 
 Known limits
 - Forever hides auras from addons in combat. Auras not tracked in the Cooldown Manager fall back to your casts (your own debuffs) or can't be checked (others' auras), and those rules don't glow.
-- Stack counts aren't supported: Forever hides them from addons in combat, both in the aura data and on the Cooldown Manager icon.
+- Stack counts aren't supported (Forever hides them from addons in combat, in the aura data and on the Cooldown Manager icon), except Maelstrom Weapon, worked out from Lightning Bolt's cast time; haste effects can make that read a stack high.
 - A dodged or parried application can't be detected unless the debuff is tracked in the Cooldown Manager.
 - The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
-- 1.7.2: Stack counts removed from buff and debuff conditions: Forever hides them from addons in combat, so they couldn't be checked when it matters.
+- 1.7.2: Stack counts removed from buff and debuff conditions (Forever hides them from addons in combat), except Maelstrom Weapon: its stacks are worked out from Lightning Bolt's cast time, and can be compared as at least, more than, at most or less than. /sglow mw shows the reading.
 - 1.7.1: Spells cast from macros now glow (the macro's spell wasn't recognized on newer clients); macros with conditions follow the spell they'd cast right now.
 - 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.

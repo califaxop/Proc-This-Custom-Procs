@@ -95,8 +95,16 @@ local function BuildEditor(p)
     row.name = UI.Edit(row, 130, { function() local a = A(); return a and a.name end,
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
+    -- stack count (Maelstrom Weapon only): comparison + number
+    row.ge = UI.Toggle(row, 32, { { "ge", ">=" }, { "gt", ">" }, { "le", "<=" }, { "lt", "<" } }, Field(A, "cmp"), refresh,
+      "Maelstrom Weapon stacks (read from Lightning Bolt's cast time): at least, more than, at most or less than. 0 with >= means any.")
+    row.ge:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
+    row.stacks = UI.Edit(row, 28, { function() local a = A(); return a and a.stacks end,
+      function(v) local a = A(); if a then a.stacks = math.max(0, math.min(5, math.floor(tonumber(v) or 0))); refresh() end end },
+      "", false, true)
+    row.stacks:SetPoint("LEFT", row.ge, "RIGHT", 4, 0)
     row.dot = CreateFrame("Frame", nil, row)
-    row.dot:SetSize(12, 12); row.dot:SetPoint("LEFT", row.name, "RIGHT", 10, 0)
+    row.dot:SetSize(12, 12); row.dot:SetPoint("LEFT", row.name, "RIGHT", 82, 0)
     row.dot.tex = row.dot:CreateTexture(nil, "ARTWORK")
     row.dot.tex:SetTexture("Interface\\Buttons\\WHITE8X8"); row.dot.tex:SetSize(8, 8); row.dot.tex:SetPoint("CENTER")
     row.dot:SetScript("OnEnter", function(self)
@@ -140,7 +148,12 @@ local function BuildEditor(p)
       local a = A()
       if not a then return end
       local r = Rule()
-      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
+      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.ge, row.stacks, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
+      local an0 = ns.AuraName(r, a)
+      local mwRow = a.mode ~= "missing" and a.unit ~= "target" and a.kind ~= "debuff" and a.match ~= "type" and an0 and ns.State.IsMaelstrom(an0)
+      row.ge:SetShown(mwRow and true or false); row.stacks:SetShown(mwRow and true or false)
+      row.dot:ClearAllPoints()
+      if mwRow then row.dot:SetPoint("LEFT", row.stacks, "RIGHT", 8, 0) else row.dot:SetPoint("LEFT", row.name, "RIGHT", 10, 0) end
       local tdebuff = a.unit == "target" and a.kind == "debuff"
       for _, w in ipairs(row.extra) do w:SetShown(tdebuff) end
       local an = ns.AuraName(r, a)
@@ -374,6 +387,7 @@ local function PageHelp(pg)
     "(for example another player's curse) can only be checked out of combat.", "note")
   local cdm = UI.Text(pg, "line", ""); cdm:SetPoint("TOPLEFT", 0, y); y = y - 26
   sec("Commands")
+  para("Maelstrom Weapon rows have a stack check (>=, >, <=, <): Forever hides stack counts, so it's worked out from Lightning Bolt's cast time (20% faster per stack). /sglow mw shows it.", "note")
   para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
     "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)")
   pg:SetScript("OnShow", function()
@@ -463,7 +477,17 @@ local function ListAuras()
   if not any then ns.Print("no auras found on you or your target.") end
 end
 
+-- /sglow mw: Maelstrom Weapon stacks as Spell Glow works them out (Lightning Bolt's cast time)
+local function ShowMaelstrom()
+  local ct = ns.State.BoltCastTime()
+  local st, how = ns.State.MaelstromStacks()
+  ns.Print(format("Maelstrom Weapon%s: Lightning Bolt cast time %s, base %s -> %s stacks (%s)",
+    InCombatLockdown() and " (in combat)" or "", ct and (ct .. " ms") or "hidden",
+    tostring(ns.State.BoltBase() or "not learned yet (2500)"), tostring(st or "?"), tostring(how)))
+end
+
 SlashCmdList.SPELLGLOW = function(msg)
+  if (msg or ""):lower():match("^mw") then ShowMaelstrom(); return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
   local ok, e = pcall(ns.OpenOptions)
