@@ -1,51 +1,37 @@
-# SpellGlow-Custom-Procs
-The modern proc glow on your action bar spells, only when the conditions you choose are met.
+# SpellGlow: Custom Procs
 
-SpellGlow: Custom Procs puts Blizzard's own retail spell-alert glow on any spell in your action bars, every rank of it. You write simple rules: each rule names a spell and the conditions that must all be true, and the spell glows while they hold, like a proc you design yourself. It works on Blizzard's bars and FlareUI's, including macros that cast the spell, without tainting your buttons.
+**Make any spell light up like a proc, exactly when it matters.**
 
-Features
-- Rules: one spell each, every rank matched by name, typed in or dragged from your spellbook.
-- Buffs and debuffs, as many as you need, in groups: each group needs all of its rows or any one of them, and groups are joined by AND (every group) or OR (any group), e.g. (Buff X OR Buff Y) AND (Debuff Z AND Debuff W). Each condition sets:
-  - who has it: on me or on target
-  - buff or debuff
-  - active or missing (Maelstrom Weapon also has a stack check: at least, more than, exactly, at most or less than)
-  - for your debuffs on a target: only mine, and a backup from your casts (how long it lasts, used up after N casts of chosen spells)
-- Other conditions: being attacked in melee, castable (known, enough mana), off cooldown (global cooldown ignored), I have control (not stunned), only in combat, the game flags it as a proc.
-- Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, and Flame Shock is on your target.
-- Combat-aware: follows buffs and debuffs through Blizzard's Cooldown Manager; each condition shows whether it's tracked there.
-- Glow style: just the glow, glow + a brief shine when it starts, or Blizzard's zoom-in burst; adjustable size and intensity.
-- Live status per rule: glowing or not, and why; how many buttons have the spell; how each buff and debuff is being read.
-- Settings window in the same style as XP Planner (FlareUI's when installed), with Rules, Look and Help tabs.
-- Starter rule included: Lightning Shield glows when it is missing, you are being hit in melee, and you can cast it.
+Pick a spell, set your conditions, and SpellGlow puts Blizzard's own proc glow on it the moment they're met. No more watching buff bars mid-fight.
 
-Settings and commands
-- /spellglow or /sglow: the settings window (Rules, Look, Help).
-- /sglow test: show every rule's glow for 3 seconds.
-- /sglow auras: list your target's and your own buffs and debuffs with spell IDs (out of combat).
-- /sglow mw: Maelstrom Weapon stacks as Spell Glow reads them from Lightning Bolt's cast time.
-- Esc > Options > AddOns > Spell Glow.
+## Highlights
+- **Any spell, any rank:** on Blizzard and FlareUI bars, macros included.
+- **Buffs & debuffs:** on you or your target, active or missing, as many as you like.
+- **Groups with AND / OR:** e.g. *(Buff X or Buff Y) and (Debuff Z and Debuff W)*.
+- **Maelstrom Weapon stacks:** `>=`, `>`, `=`, `<=`, `<` (read from Lightning Bolt's cast time, haste included).
+- **Extra checks:** being hit in melee, castable, off cooldown, not stunned, in combat, proc flagged.
+- **Your look:** just the glow, glow + shine, or Blizzard's burst; adjustable size and intensity.
+- **Live status:** each rule tells you why it is or isn't glowing.
 
-Requirements
-- WoW: Forever (client 16001). No other addons required.
-- Blizzard's Cooldown Manager turned on, with every buff and debuff your rules use added to its Tracked Buffs or Tracked Bars. In combat the game hides auras from addons; the Cooldown Manager is how Spell Glow follows them.
+## Quick start
+1. Type `/sglow` and click **+ Add rule**.
+2. Name the spell, then add your buffs and debuffs.
+3. Add those auras to Blizzard's **Cooldown Manager** (Tracked Buffs/Bars) so SpellGlow can see them in combat.
 
-Known limits
-- Forever hides auras from addons in combat. Auras not tracked in the Cooldown Manager fall back to your casts (your own debuffs) or can't be checked (others' auras), and those rules don't glow.
-- Stack counts aren't supported (Forever hides them from addons in combat, in the aura data and on the Cooldown Manager icon), except Maelstrom Weapon, worked out from Lightning Bolt's cast time with your spell haste taken into account.
-- A dodged or parried application can't be detected unless the debuff is tracked in the Cooldown Manager.
-- The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
+## Commands
+| Command | Does |
+|---|---|
+| `/sglow` | Open settings |
+| `/sglow test` | Show every glow for 3 seconds |
+| `/sglow auras` | List auras and spell IDs (out of combat) |
+| `/sglow mw` | Show the Maelstrom Weapon stack reading |
 
-Changelogs
-- 1.7.2: Buff and debuff conditions in groups: each group needs all of its rows or any one of them, and groups are joined by AND or OR, e.g. (Buff X OR Buff Y) AND (Debuff Z AND Debuff W). Stack counts removed (Forever hides them from addons in combat), except Maelstrom Weapon: its stacks are worked out from Lightning Bolt's cast time (haste taken into account) and compared as at least, more than, exactly, at most or less than. /sglow mw shows the reading.
-- 1.7.1: Spells cast from macros now glow (the macro's spell wasn't recognized on newer clients); macros with conditions follow the spell they'd cast right now.
-- 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
-- 1.6.1: Fixed an error when opening the settings window.
-- 1.6.0: Choose how the glow starts (just the glow, glow + shine, or Blizzard's zoom-in burst) and its intensity.
-- 1.5.1: Logo in the AddOns list.
-- 1.5.0: Up to 3 buff conditions per rule (all must hold), minimum stacks read from the Cooldown Manager.
-- 1.4.0: Debuffs on your target and on you followed in combat through the Cooldown Manager.
-- 1.3.0: A target debuff can be used up after N casts of chosen spells.
-- 1.2.1: /sglow auras lists auras with their spell IDs; combat aura errors fixed.
-- 1.2.0: Buff on my target condition.
-- 1.1.0: Debuff on my target and Debuff on me conditions.
-- 1.0.0: First release: Blizzard's proc glow on action bar spells by rule.
+## Good to know
+- In combat the game hides auras from addons: **track them in the Cooldown Manager**, or the rule can't see them.
+- The Cooldown Manager only tracks **your own** spells' auras.
+- Stack counts are hidden in combat, so only **Maelstrom Weapon** has a stack check.
+
+## Recent changes
+- **1.7.2:** Condition groups (All / Any, joined by AND / OR); Maelstrom Weapon stacks; other stack checks removed.
+- **1.7.1:** Glows on spells cast from macros.
+- **1.7.0:** New tabbed settings window; unlimited buff and debuff conditions.
