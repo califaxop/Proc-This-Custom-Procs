@@ -8,7 +8,7 @@ Features
 - Buffs and debuffs, as many as you need, all must hold. Each one sets:
   - who has it: on me or on target
   - buff or debuff
-  - active or missing, with an optional minimum stack count
+  - active or missing, with an optional stack count: at least, more than, at most or less than
   - for your debuffs on a target: only mine, and a backup from your casts (how long it lasts, used up after N casts of chosen spells)
 - Other conditions: being attacked in melee, castable (known, enough mana), off cooldown (global cooldown ignored), I have control (not stunned), only in combat, the game flags it as a proc.
 - Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, and Flame Shock is on your target.
@@ -35,6 +35,7 @@ Known limits
 - The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
+- 1.7.2: Stack counts can be compared four ways: at least (>=), more than (>), at most (<=) or less than (<); hidden counts in combat too.
 - 1.7.1: Spells cast from macros now glow (the macro's spell wasn't recognized on newer clients); macros with conditions follow the spell they'd cast right now.
 - 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.

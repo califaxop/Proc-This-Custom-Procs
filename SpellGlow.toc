@@ -3,7 +3,7 @@
 ## Notes: Retail-style glow on your action bar spells, when the conditions you choose are met.
 ## IconTexture: Interface\AddOns\SpellGlow\media\Logo
 ## Author: You
-## Version: 1.7.1
+## Version: 1.7.2
 ## X-Curse-Project-ID: 1811746
 ## SavedVariables: SpellGlowDB
 

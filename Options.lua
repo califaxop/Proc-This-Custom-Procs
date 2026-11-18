@@ -95,7 +95,9 @@ local function BuildEditor(p)
     row.name = UI.Edit(row, 130, { function() local a = A(); return a and a.name end,
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
-    row.ge = UI.Text(row, "note", ">=")
+    -- how the stack count compares: click to cycle (right-click goes back)
+    row.ge = UI.Toggle(row, 32, { { "ge", ">=" }, { "gt", ">" }, { "le", "<=" }, { "lt", "<" } }, Field(A, "cmp"), refresh,
+      "Stacks: at least (>=), more than (>), at most (<=) or less than (<). Click to switch. 0 with >= means any.")
     row.ge:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
     row.stacks = UI.Edit(row, 28, { function() local a = A(); return a and a.stacks end,
       function(v) local a = A(); if a then a.stacks = math.max(0, math.min(99, math.floor(tonumber(v) or 0))); refresh() end end },
@@ -146,7 +148,7 @@ local function BuildEditor(p)
       local a = A()
       if not a then return end
       local r = Rule()
-      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.stacks, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
+      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.ge, row.stacks, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
       local stackable = a.mode ~= "missing"
       row.stacks:SetShown(stackable); row.ge:SetShown(stackable)
       local tdebuff = a.unit == "target" and a.kind == "debuff"
