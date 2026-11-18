@@ -108,22 +108,51 @@ end
 
 -- Stacks from the Cooldown Manager icon tracking `name`: a number, the game's hidden number,
 -- or nil if it can't be told; plus where it came from.
+-- The stack number the Cooldown Manager icon draws on screen (Blizzard's code writes it, so it can
+-- stay readable when the aura data is hidden). Returns the number, 1 when the icon shows none
+-- (it hides "1"), or nil if the text can't be read. Plus a short note of what was found.
+local function CountText(item)
+  if type(item) ~= "table" then return nil, "no icon" end
+  local cands = {
+    item.Applications and item.Applications.Applications, item.Applications,
+    item.Icon and item.Icon.Applications, item.Count, item.count, item.Icon and item.Icon.Count,
+  }
+  for _, fs in ipairs(cands) do
+    if type(fs) == "table" and fs.GetText then
+      local ok, t = pcall(fs.GetText, fs)
+      if ok then
+        if isSecret(t) then return nil, "hidden" end
+        if t == nil or t == "" then return 1, "no number shown" end
+        local n = tonumber((tostring(t):match("%d+")))
+        if n then return n, "text " .. tostring(t) end
+      end
+    end
+  end
+  return nil, "no count text found"
+end
+S.CountText = CountText
+
 local function StacksFromCooldownManager(name)
   local active, item = FromCooldownManager(name)
   if active == nil then return nil, "untracked" end
   if not active then return 0, "cdm" end
-  local data
+  local apps
   if item and item.GetAuraDataCached then
     local ok, d = pcall(item.GetAuraDataCached, item)
-    if ok then data = d end
+    if ok and d ~= nil and canAccess(d) then
+      local okA, a = pcall(function() return d.applications end)
+      if okA then apps = a end
+    end
   end
-  if data == nil or not canAccess(data) then return nil, "no data" end
-  local ok, apps = pcall(function() return data.applications end)
-  if not ok then return nil, "no data" end
-  if isSecret(apps) then return apps, "hidden" end
-  if type(apps) == "number" then return math.max(1, apps), "cdm" end
-  return 1, "cdm" -- active with no stack count: one
+  if type(apps) == "number" and not isSecret(apps) then return math.max(1, apps), "cdm" end
+  -- hidden (or no data): the number on the icon, if it can be read
+  local n = CountText(item)
+  if n then return n, "icon text" end
+  if apps ~= nil and isSecret(apps) then return apps, "hidden" end
+  if apps == nil then return 1, "cdm" end -- active with no stack count: one
+  return nil, "no data"
 end
+S.CDMItem = function(name) local a, item = FromCooldownManager(name); return a, item end
 
 -- How many stacks of buff `name` you have (see AuraStacks).
 function S.BuffStacks(name)

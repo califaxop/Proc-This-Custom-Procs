@@ -384,6 +384,7 @@ local function PageHelp(pg)
     "(for example another player's curse) can only be checked out of combat.", "note")
   local cdm = UI.Text(pg, "line", ""); cdm:SetPoint("TOPLEFT", 0, y); y = y - 26
   sec("Commands")
+  para("/sglow stacks  shows how the stack counts of your tracked buffs are read (try it in combat)", "line")
   para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
     "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)")
   pg:SetScript("OnShow", function()
@@ -473,7 +474,44 @@ local function ListAuras()
   if not any then ns.Print("no auras found on you or your target.") end
 end
 
+-- /sglow stacks: for each buff in your rules tracked in the Cooldown Manager, what the stack
+-- count looks like from each source (aura data, the number on the icon), and what Spell Glow uses
+local function ListStacks()
+  local sec = ns.isSecret
+  ns.Print("stack counts" .. (InCombatLockdown() and " (in combat):" or ":"))
+  local seen, any = {}, false
+  for _, r in ipairs(ns.db.rules) do
+    for _, a in ipairs(r.auras or {}) do
+      local an = a.match ~= "type" and ns.AuraName(r, a)
+      if an and not seen[an] then
+        seen[an] = true
+        local active, item = ns.State.CDMItem(an)
+        if active ~= nil then
+          any = true
+          local data = "no data"
+          if item and item.GetAuraDataCached then
+            local ok, d = pcall(item.GetAuraDataCached, item)
+            if not ok then data = "refused"
+            elseif d == nil then data = "none"
+            elseif not ns.canAccess(d) then data = "hidden record"
+            else
+              local okA, n = pcall(function() return d.applications end)
+              data = not okA and "refused" or (sec(n) and "hidden" or tostring(n))
+            end
+          end
+          local _, textNote = ns.State.CountText(item)
+          local st, src = ns.State.AuraStacks(a, an)
+          print(format("  %s: %s | aura data: %s | icon number: %s | Spell Glow uses: %s (%s)", an,
+            active and "active" or "not active", data, textNote, sec(st) and "hidden" or tostring(st), tostring(src)))
+        end
+      end
+    end
+  end
+  if not any then print("  none of your rules' auras are tracked in the Cooldown Manager") end
+end
+
 SlashCmdList.SPELLGLOW = function(msg)
+  if (msg or ""):lower():match("^stack") then ListStacks(); return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
   local ok, e = pcall(ns.OpenOptions)

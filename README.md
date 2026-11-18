@@ -22,6 +22,7 @@ Settings and commands
 - /spellglow or /sglow: the settings window (Rules, Look, Help).
 - /sglow test: show every rule's glow for 3 seconds.
 - /sglow auras: list your target's and your own buffs and debuffs with spell IDs (out of combat).
+- /sglow stacks: how the stack counts of your tracked buffs are being read (try it in combat).
 - Esc > Options > AddOns > Spell Glow.
 
 Requirements
@@ -35,7 +36,7 @@ Known limits
 - The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
-- 1.7.2: Stack counts can be compared four ways: at least (>=), more than (>), at most (<=) or less than (<); hidden counts in combat too.
+- 1.7.2: Stack counts can be compared four ways: at least (>=), more than (>), at most (<=) or less than (<). In combat, when the Cooldown Manager hides a count, the number shown on its icon is used; /sglow stacks shows how each count is read.
 - 1.7.1: Spells cast from macros now glow (the macro's spell wasn't recognized on newer clients); macros with conditions follow the spell they'd cast right now.
 - 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.
