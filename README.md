@@ -5,10 +5,10 @@ SpellGlow: Custom Procs puts Blizzard's own retail spell-alert glow on any spell
 
 Features
 - Rules: one spell each, every rank matched by name, typed in or dragged from your spellbook.
-- Buffs and debuffs, as many as you need, all must hold. Each one sets:
+- Buffs and debuffs, as many as you need, joined by AND (all must hold) or OR (any one of a group is enough). Each one sets:
   - who has it: on me or on target
   - buff or debuff
-  - active or missing (Maelstrom Weapon also has a stack check: at least, more than, at most or less than)
+  - active or missing (Maelstrom Weapon also has a stack check: at least, more than, exactly, at most or less than)
   - for your debuffs on a target: only mine, and a backup from your casts (how long it lasts, used up after N casts of chosen spells)
 - Other conditions: being attacked in melee, castable (known, enough mana), off cooldown (global cooldown ignored), I have control (not stunned), only in combat, the game flags it as a proc.
 - Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, and Flame Shock is on your target.
@@ -36,7 +36,7 @@ Known limits
 - The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
-- 1.7.2: Stack counts removed from buff and debuff conditions (Forever hides them from addons in combat), except Maelstrom Weapon: its stacks are worked out from Lightning Bolt's cast time, and can be compared as at least, more than, at most or less than. /sglow mw shows the reading.
+- 1.7.2: AND / OR between buff and debuff conditions (rows joined by OR form a group where any one is enough). Stack counts removed (Forever hides them from addons in combat), except Maelstrom Weapon: its stacks are worked out from Lightning Bolt's cast time and compared as at least, more than, exactly, at most or less than. /sglow mw shows the reading.
 - 1.7.1: Spells cast from macros now glow (the macro's spell wasn't recognized on newer clients); macros with conditions follow the spell they'd cast right now.
 - 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.

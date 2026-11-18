@@ -96,8 +96,8 @@ local function BuildEditor(p)
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
     -- stack count (Maelstrom Weapon only): comparison + number
-    row.ge = UI.Toggle(row, 32, { { "ge", ">=" }, { "gt", ">" }, { "le", "<=" }, { "lt", "<" } }, Field(A, "cmp"), refresh,
-      "Maelstrom Weapon stacks (read from Lightning Bolt's cast time): at least, more than, at most or less than. 0 with >= means any.")
+    row.ge = UI.Toggle(row, 32, { { "ge", ">=" }, { "gt", ">" }, { "eq", "=" }, { "le", "<=" }, { "lt", "<" } }, Field(A, "cmp"), refresh,
+      "Maelstrom Weapon stacks (read from Lightning Bolt's cast time): at least, more than, exactly, at most or less than. 0 with >= means any.")
     row.ge:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
     row.stacks = UI.Edit(row, 28, { function() local a = A(); return a and a.stacks end,
       function(v) local a = A(); if a then a.stacks = math.max(0, math.min(5, math.floor(tonumber(v) or 0))); refresh() end end },
@@ -165,6 +165,19 @@ local function BuildEditor(p)
     return row
   end
 
+  -- AND / OR between rows: how a row joins the one above. Rows joined by OR form a group
+  -- (any one holds); groups are joined by AND (all must hold).
+  e.joins = {}
+  local function Join(i)
+    local function A() local r = Rule(); return r and r.auras[i] end
+    local j = UI.Toggle(p, 52, { { "and", "AND" }, { "or", "OR" } }, Field(A, "join"), function() ui.Refresh(); Changed() end,
+      "How this row joins the one above. AND: both must hold. OR: either one is enough (rows joined by OR form a group).")
+    j.bar = p:CreateTexture(nil, "ARTWORK")
+    j.bar:SetWidth(2)
+    UI.Skin(function(th) j.bar:SetColorTexture(UI.RGB(th.accent, 0.9)) end)
+    return j
+  end
+
   -- place everything top to bottom; the aura list is as long as it needs to be
   e.Layout = function()
     local r = Rule()
@@ -179,13 +192,36 @@ local function BuildEditor(p)
     local n = r and #r.auras or 0
     e.none:SetShown(n == 0)
     if n == 0 then place(e.none, 0, 24) end
+    local rowTop = {}
     for i = 1, n do
       local row = e.rows[i] or Row(i)
       e.rows[i] = row
+      local a = r.auras[i]
+      local j
+      if i > 1 then
+        j = e.joins[i] or Join(i)
+        e.joins[i] = j
+        j:Show(); j.Refresh()
+        j:ClearAllPoints(); j:SetPoint("TOPLEFT", p, "TOPLEFT", 6, y + 2)
+        y = y - 24
+      end
+      rowTop[i] = y
       row:Show(); row.Refresh()
-      place(row, 0, row:GetHeight() + 4)
+      place(row, 6, row:GetHeight() + 4)
+      if j then
+        -- rows joined by OR: a bronze bar down their left, from the row above to this one
+        j.bar:ClearAllPoints()
+        if a.join == "or" then
+          j.bar:SetPoint("TOPLEFT", p, "TOPLEFT", 0, rowTop[i - 1])
+          j.bar:SetPoint("BOTTOMLEFT", p, "TOPLEFT", 0, y + 4)
+          j.bar:Show()
+        else
+          j.bar:Hide()
+        end
+      end
     end
     for i = n + 1, #e.rows do e.rows[i]:Hide() end
+    for i = math.max(2, n + 1), #e.joins do if e.joins[i] then e.joins[i]:Hide(); e.joins[i].bar:Hide() end end
     e.newAura:ClearAllPoints(); e.newAura:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y - 2)
     e.addAura:ClearAllPoints(); e.addAura:SetPoint("LEFT", e.newAura, "RIGHT", 6, 0)
     e.addNote:ClearAllPoints(); e.addNote:SetPoint("LEFT", e.addAura, "RIGHT", 10, 0)
@@ -210,6 +246,7 @@ local function BuildEditor(p)
     if not r then
       e.title:SetText("Add a rule to start")
       for _, row in ipairs(e.rows) do row:Hide() end
+      for _, j in pairs(e.joins) do j:Hide(); j.bar:Hide() end
       e.none:Hide()
       return
     end
@@ -245,7 +282,12 @@ local function BuildEditor(p)
         local where = a.unit == "target" and "your target" or "you"
         local state = has == nil and "|cffffd200can't tell|r" or (has and "on " .. where or "not on " .. where)
         local cdm = ns.State.Tracked(an) and "|cff60ff60tracked|r" or "|cffff6060not tracked|r"
-        lines[#lines + 1] = format("%s: %s (%s), Cooldown Manager: %s", an, state, HOW[how] or how or "?", cdm)
+        local stackNote = ""
+        if has and ns.State.IsMaelstrom(an) and a.mode ~= "missing" and a.unit ~= "target" then
+          local st, src = ns.State.MaelstromStacks()
+          stackNote = st and format(", %d stacks (%s)", st, src) or ", stacks: can't tell"
+        end
+        lines[#lines + 1] = format("%s: %s (%s)%s, Cooldown Manager: %s", an, state, HOW[how] or how or "?", stackNote, cdm)
       end
     end
     e.status:SetText(table.concat(lines, "\n"))
@@ -387,7 +429,9 @@ local function PageHelp(pg)
     "(for example another player's curse) can only be checked out of combat.", "note")
   local cdm = UI.Text(pg, "line", ""); cdm:SetPoint("TOPLEFT", 0, y); y = y - 26
   sec("Commands")
-  para("Maelstrom Weapon rows have a stack check (>=, >, <=, <): Forever hides stack counts, so it's worked out from Lightning Bolt's cast time (20% faster per stack). /sglow mw shows it.", "note")
+  para("AND / OR between rows: rows joined by OR form a group where any one is enough; groups must all hold. " ..
+    "Example: Stormstrike on target AND (Maelstrom Weapon missing OR Maelstrom Weapon < 5).", "note")
+  para("Maelstrom Weapon rows have a stack check (>=, >, =, <=, <): Forever hides stack counts, so it's worked out from Lightning Bolt's cast time (20% faster per stack). /sglow mw shows it.", "note")
   para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
     "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)")
   pg:SetScript("OnShow", function()

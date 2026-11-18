@@ -79,7 +79,7 @@ end
 
 -- A stack condition as the range it allows: lo = fewest stacks, hi = most (nil = no limit).
 -- An active aura has at least 1 stack, so "at least 0/1" is no limit at all.
-local CMP_TEXT = { ge = "at least", gt = "more than", le = "at most", lt = "less than" }
+local CMP_TEXT = { ge = "at least", gt = "more than", le = "at most", lt = "less than", eq = "exactly" }
 G.CMP_TEXT = CMP_TEXT
 function G.StackRange(a)
   local n = math.floor(tonumber(a.stacks) or 0)
@@ -88,6 +88,7 @@ function G.StackRange(a)
   if cmp == "gt" then return (n + 1 > 1) and n + 1 or nil, nil end
   if cmp == "le" then return nil, n end
   if cmp == "lt" then return nil, n - 1 end
+  if cmp == "eq" then return math.max(1, n), n end
   return nil, nil
 end
 
@@ -183,6 +184,36 @@ function G.Restyle()
   G.Update()
 end
 
+-- One buff / debuff row: true, or false and why.
+function G.CheckAura(rule, a)
+  local an = ns.AuraLabel and ns.AuraLabel(rule, a) or ns.AuraName(rule, a)
+  if not an then return false, "name the aura" end
+  local who = (a.unit == "target") and "your target" or "you"
+  local has = S.AuraPresent(a, an)
+  if has == nil then
+    return false, format("%s on %s is hidden in combat (track it in the Cooldown Manager)", an, who)
+  end
+  if a.mode == "missing" then
+    if has then return false, format("%s is on %s", an, who) end
+    return true
+  end
+  if not has then return false, format("%s is not on %s", an, who) end
+  -- Maelstrom Weapon only: its stack count, from Lightning Bolt's cast time
+  if S.IsMaelstrom(an) and a.unit ~= "target" and a.kind ~= "debuff" and a.match ~= "type" then
+    local lo, hi = G.StackRange(a)
+    if lo or hi then
+      local st = S.MaelstromStacks()
+      if st == nil then return false, "can't tell Maelstrom Weapon's stacks (Lightning Bolt's cast time is hidden)" end
+      local need = format("%s %d", G.CMP_TEXT[a.cmp or "ge"] or "at least", tonumber(a.stacks) or 0)
+      if (hi and hi < 1) or (lo and hi and lo > hi) then return false, format("%s: never true while it's active (%s stacks)", an, need) end
+      if (lo and st < lo) or (hi and st > hi) then
+        return false, format("%s: %d stacks (needs %s)", an, st, need)
+      end
+    end
+  end
+  return true
+end
+
 -- A rule's verdict: on (true/false), why (for the settings window), and the hidden conditions
 -- (gates) the client still has to decide when on is true.
 function G.Evaluate(rule)
@@ -192,31 +223,24 @@ function G.Evaluate(rule)
   if rule.combat and not S.InCombat() then return false, "not in combat" end
   if rule.control and not S.HasControl() then return false, "no control (stunned...)" end
   if rule.melee and not S.BeingMeleed() then return false, "not being hit in melee" end
-  for _, a in ipairs(rule.auras or {}) do
-    local an = ns.AuraName(rule, a)
-    if not an then return false, "name the aura" end
-    local who = (a.unit == "target") and "your target" or "you"
-    local has = S.AuraPresent(a, an)
-    if has == nil then
-      return false, format("%s on %s is hidden in combat (track it in the Cooldown Manager)", an, who)
+  -- buff / debuff conditions: rows joined by OR form a group (any one holds); groups are joined
+  -- by AND (all must hold). A row the game won't answer is "can't tell": it fails its group unless
+  -- another row in the group holds.
+  local groups, cur = {}, nil
+  for i, a in ipairs(rule.auras or {}) do
+    if i == 1 or a.join ~= "or" then cur = {}; groups[#groups + 1] = cur end
+    cur[#cur + 1] = a
+  end
+  for _, grp in ipairs(groups) do
+    local okAny, whys = false, {}
+    for _, a in ipairs(grp) do
+      local ok, why = G.CheckAura(rule, a)
+      if ok then okAny = true; break end
+      whys[#whys + 1] = why
     end
-    if a.mode == "missing" then
-      if has then return false, format("%s is on %s", an, who) end
-    else
-      if not has then return false, format("%s is not on %s", an, who) end
-      -- Maelstrom Weapon only: its stack count, from Lightning Bolt's cast time
-      if S.IsMaelstrom(an) and a.unit ~= "target" and a.kind ~= "debuff" and a.match ~= "type" then
-        local lo, hi = G.StackRange(a)
-        if lo or hi then
-          local st = S.MaelstromStacks()
-          if st == nil then return false, "can't tell Maelstrom Weapon's stacks (Lightning Bolt's cast time is hidden)" end
-          local need = format("%s %d", G.CMP_TEXT[a.cmp or "ge"] or "at least", tonumber(a.stacks) or 0)
-          if hi and hi < 1 then return false, format("%s: never true while it's active (%s stacks)", an, need) end
-          if (lo and st < lo) or (hi and st > hi) then
-            return false, format("%s: %d stacks (needs %s)", an, st, need)
-          end
-        end
-      end
+    if not okAny then
+      if #grp == 1 then return false, whys[1] end
+      return false, "none of: " .. table.concat(whys, "; or ")
     end
   end
   if rule.proc and not S.Flagged(name) then return false, "not flagged as a proc" end

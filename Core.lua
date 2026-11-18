@@ -25,7 +25,8 @@ function ns.Print(...) print("|cffffd200Spell Glow:|r", ...) end
 ns.NEW_RULE = { enabled = true, spell = "", auras = {},
   melee = false, usable = true, ready = true, control = true, combat = false, proc = false }
 ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", stacks = 0, mine = true,
-  dur = 0, charges = 0, usedBy = "", cmp = "ge" }
+  dur = 0, charges = 0, usedBy = "", cmp = "ge",
+  join = "and" }  -- how this row joins the one above: "and", or "or" (rows joined by OR: any one holds)
 
 ns.DEFAULTS = {
   meleeWindow = 3,   -- seconds a melee hit on you counts as "being attacked in melee"
