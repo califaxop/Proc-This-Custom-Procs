@@ -223,24 +223,44 @@ function G.Evaluate(rule)
   if rule.combat and not S.InCombat() then return false, "not in combat" end
   if rule.control and not S.HasControl() then return false, "no control (stunned...)" end
   if rule.melee and not S.BeingMeleed() then return false, "not being hit in melee" end
-  -- buff / debuff conditions: rows joined by OR form a group (any one holds); groups are joined
-  -- by AND (all must hold). A row the game won't answer is "can't tell": it fails its group unless
-  -- another row in the group holds.
-  local groups, cur = {}, nil
-  for i, a in ipairs(rule.auras or {}) do
-    if i == 1 or a.join ~= "or" then cur = {}; groups[#groups + 1] = cur end
-    cur[#cur + 1] = a
+  -- buff / debuff conditions, in groups: a group holds when all its rows do ("all") or any one
+  -- does ("any"); the rule needs every group ("and") or any one group ("or")
+  local groups = {}
+  for _, a in ipairs(rule.auras or {}) do
+    local g = tonumber(a.group) or 1
+    groups[g] = groups[g] or {}
+    table.insert(groups[g], a)
   end
-  for _, grp in ipairs(groups) do
-    local okAny, whys = false, {}
-    for _, a in ipairs(grp) do
+  local gids = {}
+  for g in pairs(groups) do gids[#gids + 1] = g end
+  table.sort(gids)
+  local function GroupOK(g)
+    local any = (rule.groupModes and rule.groupModes[g]) == "any"
+    local whys = {}
+    for _, a in ipairs(groups[g]) do
       local ok, why = G.CheckAura(rule, a)
-      if ok then okAny = true; break end
-      whys[#whys + 1] = why
+      if any and ok then return true end
+      if not any and not ok then return false, why end
+      if not ok then whys[#whys + 1] = why end
     end
-    if not okAny then
-      if #grp == 1 then return false, whys[1] end
-      return false, "none of: " .. table.concat(whys, "; or ")
+    if any then return false, (#whys == 1) and whys[1] or ("none of: " .. table.concat(whys, "; or ")) end
+    return true
+  end
+  if #gids > 0 then
+    if rule.join == "or" then
+      local whys = {}
+      local okAny = false
+      for _, g in ipairs(gids) do
+        local ok, why = GroupOK(g)
+        if ok then okAny = true; break end
+        whys[#whys + 1] = why
+      end
+      if not okAny then return false, (#whys == 1) and whys[1] or ("no group holds: " .. table.concat(whys, " / ")) end
+    else
+      for _, g in ipairs(gids) do
+        local ok, why = GroupOK(g)
+        if not ok then return false, why end
+      end
     end
   end
   if rule.proc and not S.Flagged(name) then return false, "not flagged as a proc" end

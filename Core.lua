@@ -26,7 +26,7 @@ ns.NEW_RULE = { enabled = true, spell = "", auras = {},
   melee = false, usable = true, ready = true, control = true, combat = false, proc = false }
 ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", stacks = 0, mine = true,
   dur = 0, charges = 0, usedBy = "", cmp = "ge",
-  join = "and" }  -- how this row joins the one above: "and", or "or" (rows joined by OR: any one holds)
+  group = 1 }  -- which group it's in (see ns.NormalizeGroups)
 
 ns.DEFAULTS = {
   meleeWindow = 3,   -- seconds a melee hit on you counts as "being attacked in melee"
@@ -50,6 +50,29 @@ local function Copy(v)
   return t
 end
 ns.Copy = Copy
+
+-- Conditions come in groups: rule.groupModes[g] = "all" (every row in the group must hold) or
+-- "any" (one is enough); rule.join = "and" (every group must hold) or "or" (one group is enough).
+-- Keeps groups numbered 1..n in order, rows sorted by group, and drops empty groups.
+function ns.NormalizeGroups(r)
+  r.auras = r.auras or {}
+  r.groupModes = r.groupModes or {}
+  r.join = (r.join == "or") and "or" or "and"
+  local order, map = {}, {}
+  for _, a in ipairs(r.auras) do
+    local g = tonumber(a.group) or 1
+    if not map[g] then order[#order + 1] = g; map[g] = true end
+  end
+  table.sort(order)
+  local renum, modes = {}, {}
+  for i, g in ipairs(order) do renum[g] = i; modes[i] = (r.groupModes[g] == "any") and "any" or "all" end
+  for _, a in ipairs(r.auras) do a.group = renum[tonumber(a.group) or 1] end
+  -- stable sort by group
+  for i, a in ipairs(r.auras) do a._i = i end
+  table.sort(r.auras, function(x, y) if x.group ~= y.group then return x.group < y.group end return x._i < y._i end)
+  for _, a in ipairs(r.auras) do a._i = nil end
+  r.groupModes = modes
+end
 
 function ns.LoadDB()
   SpellGlowDB = SpellGlowDB or {}
@@ -86,6 +109,29 @@ function ns.LoadDB()
     for _, k in ipairs({ "buff", "buffName", "buffs", "tdebuff", "tdebuffName", "tdebuffMine", "tdebuffDur",
       "tdebuffCharges", "tdebuffUsedBy", "pdebuff", "pdebuffName", "tbuff", "tbuffName" }) do r[k] = nil end
     for k, v in pairs(ns.NEW_RULE) do if r[k] == nil then r[k] = Copy(v) end end
+    -- rows joined by OR (an earlier test build) -> groups: each OR run becomes an "any" group,
+    -- the rest one "all" group
+    local hadJoin = false
+    for _, a in ipairs(r.auras) do if a.join ~= nil then hadJoin = true end end
+    if hadJoin and r.groupModes == nil then
+      local runs, cur = {}, nil
+      for i, a in ipairs(r.auras) do
+        if i == 1 or a.join ~= "or" then cur = { a }; runs[#runs + 1] = cur else cur[#cur + 1] = a end
+      end
+      r.groupModes = {}
+      local g, single = 0, nil
+      for _, run in ipairs(runs) do
+        if #run > 1 then
+          g = g + 1; r.groupModes[g] = "any"; single = nil
+          for _, a in ipairs(run) do a.group = g end
+        else
+          if not single then g = g + 1; r.groupModes[g] = "all"; single = g end
+          run[1].group = single
+        end
+      end
+    end
+    for _, a in ipairs(r.auras) do a.join = nil end
+    ns.NormalizeGroups(r)
     for _, c in ipairs(r.auras) do
       for k, v in pairs(ns.NEW_AURA) do if c[k] == nil then c[k] = v end end
     end

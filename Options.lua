@@ -47,26 +47,31 @@ local function BuildEditor(p)
   e.spellNote = UI.Text(p, "note", "Every rank glows. Type it, or drag it from your spellbook.")
   e.spellNote:SetWidth(EW - 244)
 
-  -- aura conditions
-  e.secAuras = UI.Section(p, "Buffs and debuffs (all must hold)", EW)
+  -- aura conditions, in groups
+  e.secAuras = UI.Section(p, "Buffs and debuffs", EW)
   e.cdmNote = UI.Text(p, "note",
-    "In combat the game hides auras from addons: add each one to Blizzard's Cooldown Manager " ..
-    "(Tracked Buffs or Tracked Bars) so Spell Glow can follow it. The dot shows if it's tracked.")
+    "Conditions come in groups. Each group needs all of its rows, or any one of them; " ..
+    "groups are joined by AND (every group) or OR (any group). In combat the game hides auras from addons: " ..
+    "add each one to Blizzard's Cooldown Manager (Tracked Buffs or Bars). The dot shows if it's tracked.")
   e.cdmNote:SetWidth(EW)
-  e.none = UI.Text(p, "note", "No buff or debuff conditions yet.")
+  e.none = UI.Text(p, "note", "No buff or debuff conditions yet: start a group below.")
+  -- "+ New group": name the first condition of a new group
   local newName = ""
-  e.newAura = UI.Edit(p, 230, { function() return newName end, function(v) newName = v end },
+  e.newGroupBox = UI.Edit(p, 200, { function() return newName end, function(v) newName = v end },
     "Buff or debuff: name or ID", true)
-  e.addAura = UI.Button(p, "+ Add", 70, function()
+  e.newGroup = UI.Button(p, "+ New group", 110, function()
     local r = Rule(); if not r then return end
-    newName = strtrim(e.newAura:GetText() or "")
-    local c = ns.Copy(ns.NEW_AURA); c.name = newName
+    local c = ns.Copy(ns.NEW_AURA); c.name = strtrim(e.newGroupBox:GetText() or "")
+    local maxG = 0
+    for _, x in ipairs(r.auras) do maxG = math.max(maxG, tonumber(x.group) or 1) end
+    c.group = maxG + 1
     table.insert(r.auras, c)
-    newName = ""; e.newAura:SetText(""); e.newAura:ClearFocus()
+    ns.NormalizeGroups(r)
+    newName = ""; e.newGroupBox:SetText(""); e.newGroupBox:ClearFocus()
     ui.Refresh(); Changed()
   end)
-  e.newAura:SetScript("OnEnterPressed", function() e.addAura:Click() end)
-  e.addNote = UI.Text(p, "note", "Blank = the spell itself.")
+  e.newGroup.tip = "Start another group of conditions. Blank name = the spell itself."
+  e.newGroupBox:SetScript("OnEnterPressed", function() e.newGroup:Click() end)
 
   -- other conditions
   e.secOther = UI.Section(p, "Other conditions", EW)
@@ -83,23 +88,23 @@ local function BuildEditor(p)
   -- one aura row (+ a second line for your debuffs on the target)
   local function Row(i)
     local row = CreateFrame("Frame", nil, p)
-    row:SetSize(EW, 48)
+    row:SetSize(EW - 24, 48)
     local function A() local r = Rule(); return r and r.auras[i] end
     local function refresh() ui.Refresh(); Changed() end
-    row.unit = UI.Toggle(row, 76, UNITS, Field(A, "unit"), refresh, "On you or on your target. Click to switch.")
+    row.unit = UI.Toggle(row, 70, UNITS, Field(A, "unit"), refresh, "On you or on your target. Click to switch.")
     row.unit:SetPoint("TOPLEFT", 0, 0)
-    row.kind = UI.Toggle(row, 62, KINDS, Field(A, "kind"), refresh, "A buff or a debuff. Click to switch.")
+    row.kind = UI.Toggle(row, 56, KINDS, Field(A, "kind"), refresh, "A buff or a debuff. Click to switch.")
     row.kind:SetPoint("LEFT", row.unit, "RIGHT", 4, 0)
-    row.mode = UI.Toggle(row, 66, MODES, Field(A, "mode"), refresh, "Glow while it's active, or while it's missing. Click to switch.")
+    row.mode = UI.Toggle(row, 62, MODES, Field(A, "mode"), refresh, "Glow while it's active, or while it's missing. Click to switch.")
     row.mode:SetPoint("LEFT", row.kind, "RIGHT", 4, 0)
-    row.name = UI.Edit(row, 130, { function() local a = A(); return a and a.name end,
+    row.name = UI.Edit(row, 116, { function() local a = A(); return a and a.name end,
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
     -- stack count (Maelstrom Weapon only): comparison + number
-    row.ge = UI.Toggle(row, 32, { { "ge", ">=" }, { "gt", ">" }, { "eq", "=" }, { "le", "<=" }, { "lt", "<" } }, Field(A, "cmp"), refresh,
+    row.ge = UI.Toggle(row, 30, { { "ge", ">=" }, { "gt", ">" }, { "eq", "=" }, { "le", "<=" }, { "lt", "<" } }, Field(A, "cmp"), refresh,
       "Maelstrom Weapon stacks (read from Lightning Bolt's cast time): at least, more than, exactly, at most or less than. 0 with >= means any.")
     row.ge:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
-    row.stacks = UI.Edit(row, 28, { function() local a = A(); return a and a.stacks end,
+    row.stacks = UI.Edit(row, 26, { function() local a = A(); return a and a.stacks end,
       function(v) local a = A(); if a then a.stacks = math.max(0, math.min(5, math.floor(tonumber(v) or 0))); refresh() end end },
       "", false, true)
     row.stacks:SetPoint("LEFT", row.ge, "RIGHT", 4, 0)
@@ -116,14 +121,14 @@ local function BuildEditor(p)
     end)
     row.dot:SetScript("OnLeave", function() GameTooltip:Hide() end)
     row.del = UI.Button(row, "\195\151", 22, function()
-      local r = Rule(); if r then table.remove(r.auras, i); refresh() end
+      local r = Rule(); if r then table.remove(r.auras, i); ns.NormalizeGroups(r); refresh() end
     end)
     row.del.tip = "Remove this condition"
     row.del:SetPoint("LEFT", row.dot, "RIGHT", 6, 0)
 
     -- second line: your debuff on the target
     row.mine = UI.Check(row, "Only mine", Field(A, "mine"), 92, refresh)
-    row.mine:SetPoint("TOPLEFT", 18, -26)
+    row.mine:SetPoint("TOPLEFT", 10, -26)
     row.lasts = UI.Text(row, "note", "lasts")
     row.lasts:SetPoint("LEFT", row.mine, "RIGHT", 2, 0)
     row.dur = UI.Edit(row, 34, { function() local a = A(); return a and a.dur end,
@@ -136,7 +141,7 @@ local function BuildEditor(p)
     row.charges:SetPoint("LEFT", row.after, "RIGHT", 4, 0)
     row.casts = UI.Text(row, "note", "casts of")
     row.casts:SetPoint("LEFT", row.charges, "RIGHT", 4, 0)
-    row.usedBy = UI.Edit(row, 104, { function() local a = A(); return a and a.usedBy end,
+    row.usedBy = UI.Edit(row, 92, { function() local a = A(); return a and a.usedBy end,
       function(v) local a = A(); if a then a.usedBy = v; refresh() end end }, "this spell", false)
     row.usedBy:SetPoint("LEFT", row.casts, "RIGHT", 4, 0)
     row.extra = { row.mine, row.lasts, row.dur, row.after, row.charges, row.casts, row.usedBy }
@@ -165,17 +170,41 @@ local function BuildEditor(p)
     return row
   end
 
-  -- AND / OR between rows: how a row joins the one above. Rows joined by OR form a group
-  -- (any one holds); groups are joined by AND (all must hold).
-  e.joins = {}
-  local function Join(i)
-    local function A() local r = Rule(); return r and r.auras[i] end
-    local j = UI.Toggle(p, 52, { { "and", "AND" }, { "or", "OR" } }, Field(A, "join"), function() ui.Refresh(); Changed() end,
-      "How this row joins the one above. AND: both must hold. OR: either one is enough (rows joined by OR form a group).")
-    j.bar = p:CreateTexture(nil, "ARTWORK")
-    j.bar:SetWidth(2)
-    UI.Skin(function(th) j.bar:SetColorTexture(UI.RGB(th.accent, 0.9)) end)
-    return j
+  -- a group: a bordered box with its "All of these / Any of these" switch, its rows, and its own Add box
+  e.boxes = {}
+  local function Box(g)
+    local bx = CreateFrame("Frame", nil, p, "BackdropTemplate")
+    bx:SetFrameLevel(math.max(1, p:GetFrameLevel()))
+    bx:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    UI.Skin(function(th) bx:SetBackdropColor(UI.RGB(th.box, 0.10)); bx:SetBackdropBorderColor(UI.RGB(th.accent, 0.55)) end)
+    local function R() return Rule() end
+    bx.title = UI.Text(bx, "value", "Group " .. g)
+    bx.title:SetPoint("TOPLEFT", 10, -9)
+    bx.mode = UI.Toggle(p, 210, { { "all", "All of these must hold" }, { "any", "Any one of these is enough" } },
+      { function() local r = R(); return r and r.groupModes and r.groupModes[g] or "all" end,
+        function(v) local r = R(); if r then r.groupModes = r.groupModes or {}; r.groupModes[g] = v end end },
+      function() ui.Refresh(); Changed() end, "How the rows in this group combine. Click to switch.")
+    bx.mode:SetPoint("LEFT", bx.title, "RIGHT", 10, 0)
+    local name = ""
+    bx.add = UI.Edit(p, 200, { function() return name end, function(v) name = v end }, "Add to this group: name or ID", true)
+    bx.addBtn = UI.Button(p, "+ Add", 60, function()
+      local r = R(); if not r then return end
+      local c = ns.Copy(ns.NEW_AURA); c.name = strtrim(bx.add:GetText() or ""); c.group = g
+      table.insert(r.auras, c)
+      ns.NormalizeGroups(r)
+      name = ""; bx.add:SetText(""); bx.add:ClearFocus()
+      ui.Refresh(); Changed()
+    end)
+    bx.addBtn.tip = "Add a condition to this group. Blank name = the spell itself."
+    bx.add:SetScript("OnEnterPressed", function() bx.addBtn:Click() end)
+    -- the AND / OR between this group and the one above (one setting for the whole rule)
+    bx.join = UI.Toggle(p, 64, { { "and", "AND" }, { "or", "OR" } },
+      { function() local r = R(); return r and r.join or "and" end, function(v) local r = R(); if r then r.join = v end end },
+      function() ui.Refresh(); Changed() end, "How groups combine: AND = every group must hold, OR = any one group is enough.")
+    bx.joinNote = UI.Text(p, "note", "")
+    bx.joinNote:SetPoint("LEFT", bx.join, "RIGHT", 8, 0)
+    bx.parts = { bx, bx.mode, bx.add, bx.addBtn, bx.join, bx.joinNote }
+    return bx
   end
 
   -- place everything top to bottom; the aura list is as long as it needs to be
@@ -192,39 +221,45 @@ local function BuildEditor(p)
     local n = r and #r.auras or 0
     e.none:SetShown(n == 0)
     if n == 0 then place(e.none, 0, 24) end
-    local rowTop = {}
-    for i = 1, n do
-      local row = e.rows[i] or Row(i)
-      e.rows[i] = row
-      local a = r.auras[i]
-      local j
-      if i > 1 then
-        j = e.joins[i] or Join(i)
-        e.joins[i] = j
-        j:Show(); j.Refresh()
-        j:ClearAllPoints(); j:SetPoint("TOPLEFT", p, "TOPLEFT", 6, y + 2)
-        y = y - 24
+    local ngroups = 0
+    for _, a in ipairs(r and r.auras or {}) do ngroups = math.max(ngroups, a.group or 1) end
+    local i = 1
+    for g = 1, ngroups do
+      local bx = e.boxes[g] or Box(g)
+      e.boxes[g] = bx
+      for _, w in ipairs(bx.parts) do w:Show() end
+      -- AND / OR between groups
+      if g > 1 then
+        bx.join.Refresh()
+        bx.join:ClearAllPoints(); bx.join:SetPoint("TOPLEFT", p, "TOPLEFT", 12, y - 2)
+        bx.joinNote:SetText(r.join == "or" and "any one group is enough" or "every group must hold")
+        y = y - 30
+      else
+        bx.join:Hide(); bx.joinNote:Hide()
       end
-      rowTop[i] = y
-      row:Show(); row.Refresh()
-      place(row, 6, row:GetHeight() + 4)
-      if j then
-        -- rows joined by OR: a bronze bar down their left, from the row above to this one
-        j.bar:ClearAllPoints()
-        if a.join == "or" then
-          j.bar:SetPoint("TOPLEFT", p, "TOPLEFT", 0, rowTop[i - 1])
-          j.bar:SetPoint("BOTTOMLEFT", p, "TOPLEFT", 0, y + 4)
-          j.bar:Show()
-        else
-          j.bar:Hide()
-        end
+      local top = y
+      bx:ClearAllPoints(); bx:SetPoint("TOPLEFT", p, "TOPLEFT", 0, top); bx:SetWidth(EW)
+      bx.mode.Refresh()
+      y = y - 34
+      while i <= n and (r.auras[i].group or 1) == g do
+        local row = e.rows[i] or Row(i)
+        e.rows[i] = row
+        row:Show(); row.Refresh()
+        row:SetFrameLevel(bx:GetFrameLevel() + 2)
+        place(row, 12, row:GetHeight() + 4)
+        i = i + 1
       end
+      bx.add:ClearAllPoints(); bx.add:SetPoint("TOPLEFT", p, "TOPLEFT", 12, y - 2)
+      bx.addBtn:ClearAllPoints(); bx.addBtn:SetPoint("LEFT", bx.add, "RIGHT", 6, 0)
+      bx.add.Refresh()
+      y = y - 32
+      bx:SetHeight(top - y)
+      y = y - 8
     end
-    for i = n + 1, #e.rows do e.rows[i]:Hide() end
-    for i = math.max(2, n + 1), #e.joins do if e.joins[i] then e.joins[i]:Hide(); e.joins[i].bar:Hide() end end
-    e.newAura:ClearAllPoints(); e.newAura:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y - 2)
-    e.addAura:ClearAllPoints(); e.addAura:SetPoint("LEFT", e.newAura, "RIGHT", 6, 0)
-    e.addNote:ClearAllPoints(); e.addNote:SetPoint("LEFT", e.addAura, "RIGHT", 10, 0)
+    for k = n + 1, #e.rows do e.rows[k]:Hide() end
+    for g = ngroups + 1, #e.boxes do for _, w in ipairs(e.boxes[g].parts) do w:Hide() end end
+    e.newGroupBox:ClearAllPoints(); e.newGroupBox:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y - 2)
+    e.newGroup:ClearAllPoints(); e.newGroup:SetPoint("LEFT", e.newGroupBox, "RIGHT", 6, 0)
     y = y - 40
     place(e.secOther, 0, 30)
     for i, cb in ipairs(e.checks) do
@@ -240,20 +275,20 @@ local function BuildEditor(p)
   e.Refresh = function()
     local r = Rule()
     local shown = r ~= nil
-    for _, w in ipairs({ e.icon, e.enabled, e.secSpell, e.spell, e.spellNote, e.secAuras, e.cdmNote, e.newAura, e.addAura,
-      e.addNote, e.secOther, e.secStatus, e.status }) do w:SetShown(shown) end
+    for _, w in ipairs({ e.icon, e.enabled, e.secSpell, e.spell, e.spellNote, e.secAuras, e.cdmNote, e.newGroupBox, e.newGroup,
+      e.secOther, e.secStatus, e.status }) do w:SetShown(shown) end
     for _, cb in ipairs(e.checks) do cb:SetShown(shown) end
     if not r then
       e.title:SetText("Add a rule to start")
       for _, row in ipairs(e.rows) do row:Hide() end
-      for _, j in pairs(e.joins) do j:Hide(); j.bar:Hide() end
+      for _, bx in pairs(e.boxes) do for _, w in ipairs(bx.parts) do w:Hide() end end
       e.none:Hide()
       return
     end
     local name = ns.RuleSpellName(r)
     e.title:SetText(name or "New rule")
     e.icon:SetTexture(name and ns.SpellIcon(name) or "Interface\\Icons\\INV_Misc_QuestionMark")
-    e.enabled.Refresh(); e.spell.Refresh(); e.newAura.Refresh()
+    e.enabled.Refresh(); e.spell.Refresh(); e.newGroupBox.Refresh()
     for _, cb in ipairs(e.checks) do cb.Refresh() end
     e.Layout()
   end
@@ -429,8 +464,8 @@ local function PageHelp(pg)
     "(for example another player's curse) can only be checked out of combat.", "note")
   local cdm = UI.Text(pg, "line", ""); cdm:SetPoint("TOPLEFT", 0, y); y = y - 26
   sec("Commands")
-  para("AND / OR between rows: rows joined by OR form a group where any one is enough; groups must all hold. " ..
-    "Example: Stormstrike on target AND (Maelstrom Weapon missing OR Maelstrom Weapon < 5).", "note")
+  para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
+    "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
   para("Maelstrom Weapon rows have a stack check (>=, >, =, <=, <): Forever hides stack counts, so it's worked out from Lightning Bolt's cast time (20% faster per stack). /sglow mw shows it.", "note")
   para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
     "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)")
