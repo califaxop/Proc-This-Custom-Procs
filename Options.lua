@@ -95,16 +95,8 @@ local function BuildEditor(p)
     row.name = UI.Edit(row, 130, { function() local a = A(); return a and a.name end,
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
-    -- how the stack count compares: click to cycle (right-click goes back)
-    row.ge = UI.Toggle(row, 32, { { "ge", ">=" }, { "gt", ">" }, { "le", "<=" }, { "lt", "<" } }, Field(A, "cmp"), refresh,
-      "Stacks: at least (>=), more than (>), at most (<=) or less than (<). Click to switch. 0 with >= means any.")
-    row.ge:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
-    row.stacks = UI.Edit(row, 28, { function() local a = A(); return a and a.stacks end,
-      function(v) local a = A(); if a then a.stacks = math.max(0, math.min(99, math.floor(tonumber(v) or 0))); refresh() end end },
-      "", false, true)
-    row.stacks:SetPoint("LEFT", row.ge, "RIGHT", 4, 0)
     row.dot = CreateFrame("Frame", nil, row)
-    row.dot:SetSize(12, 12); row.dot:SetPoint("LEFT", row.stacks, "RIGHT", 8, 0)
+    row.dot:SetSize(12, 12); row.dot:SetPoint("LEFT", row.name, "RIGHT", 10, 0)
     row.dot.tex = row.dot:CreateTexture(nil, "ARTWORK")
     row.dot.tex:SetTexture("Interface\\Buttons\\WHITE8X8"); row.dot.tex:SetSize(8, 8); row.dot.tex:SetPoint("CENTER")
     row.dot:SetScript("OnEnter", function(self)
@@ -148,9 +140,7 @@ local function BuildEditor(p)
       local a = A()
       if not a then return end
       local r = Rule()
-      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.ge, row.stacks, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
-      local stackable = a.mode ~= "missing"
-      row.stacks:SetShown(stackable); row.ge:SetShown(stackable)
+      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
       local tdebuff = a.unit == "target" and a.kind == "debuff"
       for _, w in ipairs(row.extra) do w:SetShown(tdebuff) end
       local an = ns.AuraName(r, a)
@@ -374,7 +364,7 @@ local function PageHelp(pg)
   sec("How rules work")
   para("A rule glows a spell on your action bars while ALL of its conditions hold. Add as many buffs and debuffs as you like: " ..
     "each one says who has it (you or your target), whether it's a buff or a debuff, and whether it must be active or missing.")
-  para("Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you with at least 5 stacks, " ..
+  para("Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, " ..
     "and Flame Shock is on your target.", "note")
   sec("The Cooldown Manager is required in combat")
   para("In combat, the game hides buffs and debuffs from addons. Spell Glow follows them through Blizzard's Cooldown Manager instead, " ..
@@ -384,7 +374,6 @@ local function PageHelp(pg)
     "(for example another player's curse) can only be checked out of combat.", "note")
   local cdm = UI.Text(pg, "line", ""); cdm:SetPoint("TOPLEFT", 0, y); y = y - 26
   sec("Commands")
-  para("/sglow stacks  shows how the stack counts of your tracked buffs are read (try it in combat)", "line")
   para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
     "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)")
   pg:SetScript("OnShow", function()
@@ -474,44 +463,7 @@ local function ListAuras()
   if not any then ns.Print("no auras found on you or your target.") end
 end
 
--- /sglow stacks: for each buff in your rules tracked in the Cooldown Manager, what the stack
--- count looks like from each source (aura data, the number on the icon), and what Spell Glow uses
-local function ListStacks()
-  local sec = ns.isSecret
-  ns.Print("stack counts" .. (InCombatLockdown() and " (in combat):" or ":"))
-  local seen, any = {}, false
-  for _, r in ipairs(ns.db.rules) do
-    for _, a in ipairs(r.auras or {}) do
-      local an = a.match ~= "type" and ns.AuraName(r, a)
-      if an and not seen[an] then
-        seen[an] = true
-        local active, item = ns.State.CDMItem(an)
-        if active ~= nil then
-          any = true
-          local data = "no data"
-          if item and item.GetAuraDataCached then
-            local ok, d = pcall(item.GetAuraDataCached, item)
-            if not ok then data = "refused"
-            elseif d == nil then data = "none"
-            elseif not ns.canAccess(d) then data = "hidden record"
-            else
-              local okA, n = pcall(function() return d.applications end)
-              data = not okA and "refused" or (sec(n) and "hidden" or tostring(n))
-            end
-          end
-          local _, textNote = ns.State.CountText(item)
-          local st, src = ns.State.AuraStacks(a, an)
-          print(format("  %s: %s | aura data: %s | icon number: %s | Spell Glow uses: %s (%s)", an,
-            active and "active" or "not active", data, textNote, sec(st) and "hidden" or tostring(st), tostring(src)))
-        end
-      end
-    end
-  end
-  if not any then print("  none of your rules' auras are tracked in the Cooldown Manager") end
-end
-
 SlashCmdList.SPELLGLOW = function(msg)
-  if (msg or ""):lower():match("^stack") then ListStacks(); return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
   local ok, e = pcall(ns.OpenOptions)

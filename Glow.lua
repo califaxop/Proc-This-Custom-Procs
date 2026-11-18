@@ -54,7 +54,7 @@ function G.ForgetSlots() wipe(slotCache) end
 
 -- The glow sits inside a chain of "gate" frames on the button. Alphas multiply, so each gate
 -- is one more condition: open (1) or shut (0). Gates are how conditions the game hides
--- (usable, stack counts) still work: the client sets their alpha from the hidden value,
+-- (e.g. castable) still work: the client sets their alpha from the hidden value,
 -- without Spell Glow ever reading it.
 local MAX_GATES = 4
 local function GlowFrame(b)
@@ -77,51 +77,14 @@ local function GlowFrame(b)
   return glow
 end
 
--- Comparing a hidden stack count: the client's step curve turns it into 0 or 1 without us reading it.
---   up = true : 0 below `edge`, 1 from `edge` up   (at least / more than)
---   up = false: 1 below `edge`, 0 from `edge` up   (at most / less than)
-local curves = {}
-ns.curveState = "untested"
-local function StackCurve(edge, up)
-  local key = edge .. (up and "+" or "-")
-  if curves[key] then return curves[key] end
-  if not (C_CurveUtil and C_CurveUtil.CreateCurve) then ns.curveState = "unsupported"; return nil end
-  local ok, c = pcall(C_CurveUtil.CreateCurve)
-  if not ok or not c then ns.curveState = "unsupported"; return nil end
-  if Enum and Enum.LuaCurveType and c.SetType then pcall(c.SetType, c, Enum.LuaCurveType.Step) end
-  local below, from = up and 0 or 1, up and 1 or 0
-  if not (pcall(c.AddPoint, c, 0, below) and pcall(c.AddPoint, c, edge, from)) then ns.curveState = "unsupported"; return nil end
-  curves[key] = c
-  return c
-end
-
 -- set one gate from a hidden value; false if the client can't do it
 local function SetGate(g, gate)
   if gate.kind == "bool" then
     if g.SetAlphaFromBoolean then g:SetAlphaFromBoolean(gate.v, 1, 0); return true end
     return false
   end
-  local c = StackCurve(gate.edge, gate.up)
-  if not c then return false end
-  local ok, v = pcall(c.Evaluate, c, gate.v)
-  if ok and v ~= nil and pcall(g.SetAlpha, g, v) then ns.curveState = "works"; return true end
-  ns.curveState = "unsupported"
   return false
 end
-
--- A stack condition as the range it allows: lo = fewest stacks allowed, hi = most (nil = no limit).
--- An active aura has at least 1 stack, so "at least 0/1" is no limit at all.
-local CMP_TEXT = { ge = "at least", gt = "more than", le = "at most", lt = "less than" }
-function G.StackRange(a)
-  local n = math.floor(tonumber(a.stacks) or 0)
-  local cmp = a.cmp or "ge"
-  if cmp == "ge" then return (n > 1) and n or nil, nil end
-  if cmp == "gt" then return (n + 1 > 1) and n + 1 or nil, nil end
-  if cmp == "le" then return nil, n end
-  if cmp == "lt" then return nil, n - 1 end
-  return nil, nil
-end
-G.CMP_TEXT = CMP_TEXT
 
 -- Shine: a second copy of the glow, added on top (additive) and faded out, so the glow flares
 -- briefly when it starts, then settles at its normal intensity.
@@ -227,20 +190,6 @@ function G.Evaluate(rule)
       if has then return false, format("%s is on %s", an, who) end
     else
       if not has then return false, format("%s is not on %s", an, who) end
-      local lo, hi
-      if a.match ~= "type" then lo, hi = G.StackRange(a) end -- (not `x and f()`: that keeps only f's first value)
-      if lo or hi then
-        local st = S.AuraStacks(a, an)
-        if st == nil then return false, an .. ": stacks can't be read (track it in the Cooldown Manager)" end
-        local need = format("%s %d", CMP_TEXT[a.cmp or "ge"] or "at least", tonumber(a.stacks) or 0)
-        if hi and hi < 1 then return false, format("%s: never true while it's active (%s stacks)", an, need) end
-        if isSecret(st) then
-          if lo then gates[#gates + 1] = { kind = "stacks", v = st, edge = lo, up = true } end
-          if hi then gates[#gates + 1] = { kind = "stacks", v = st, edge = hi + 1, up = false } end
-        elseif (lo and st < lo) or (hi and st > hi) then
-          return false, format("%s: %d stacks (needs %s)", an, st, need)
-        end
-      end
     end
   end
   if rule.proc and not S.Flagged(name) then return false, "not flagged as a proc" end

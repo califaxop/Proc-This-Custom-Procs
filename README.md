@@ -8,11 +8,11 @@ Features
 - Buffs and debuffs, as many as you need, all must hold. Each one sets:
   - who has it: on me or on target
   - buff or debuff
-  - active or missing, with an optional stack count: at least, more than, at most or less than
+  - active or missing
   - for your debuffs on a target: only mine, and a backup from your casts (how long it lasts, used up after N casts of chosen spells)
 - Other conditions: being attacked in melee, castable (known, enough mana), off cooldown (global cooldown ignored), I have control (not stunned), only in combat, the game flags it as a proc.
 - Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, and Flame Shock is on your target.
-- Combat-aware: follows buffs, debuffs and stack counts through Blizzard's Cooldown Manager; each condition shows whether it's tracked there.
+- Combat-aware: follows buffs and debuffs through Blizzard's Cooldown Manager; each condition shows whether it's tracked there.
 - Glow style: just the glow, glow + a brief shine when it starts, or Blizzard's zoom-in burst; adjustable size and intensity.
 - Live status per rule: glowing or not, and why; how many buttons have the spell; how each buff and debuff is being read.
 - Settings window in the same style as XP Planner (FlareUI's when installed), with Rules, Look and Help tabs.
@@ -22,7 +22,6 @@ Settings and commands
 - /spellglow or /sglow: the settings window (Rules, Look, Help).
 - /sglow test: show every rule's glow for 3 seconds.
 - /sglow auras: list your target's and your own buffs and debuffs with spell IDs (out of combat).
-- /sglow stacks: how the stack counts of your tracked buffs are being read (try it in combat).
 - Esc > Options > AddOns > Spell Glow.
 
 Requirements
@@ -31,12 +30,12 @@ Requirements
 
 Known limits
 - Forever hides auras from addons in combat. Auras not tracked in the Cooldown Manager fall back to your casts (your own debuffs) or can't be checked (others' auras), and those rules don't glow.
-- Comparing a hidden stack count relies on a client function not yet confirmed on Forever; the rule's status says whether it works.
+- Stack counts aren't supported: Forever hides them from addons in combat, both in the aura data and on the Cooldown Manager icon.
 - A dodged or parried application can't be detected unless the debuff is tracked in the Cooldown Manager.
 - The Cooldown Manager only tracks your own spells' auras: auras other players put on you or your target can only be checked out of combat.
 
 Changelogs
-- 1.7.2: Stack counts can be compared four ways: at least (>=), more than (>), at most (<=) or less than (<). In combat, when the Cooldown Manager hides a count, the number shown on its icon is used; /sglow stacks shows how each count is read.
+- 1.7.2: Stack counts removed from buff and debuff conditions: Forever hides them from addons in combat, so they couldn't be checked when it matters.
 - 1.7.1: Spells cast from macros now glow (the macro's spell wasn't recognized on newer clients); macros with conditions follow the spell they'd cast right now.
 - 1.7.0: Redesigned settings window (XP Planner's style, with tabs); unlimited buff and debuff conditions per rule, each on you or your target; existing rules are converted automatically.
 - 1.6.1: Fixed an error when opening the settings window.
