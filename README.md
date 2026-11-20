@@ -31,7 +31,11 @@ Pick a spell, set your conditions, and SpellGlow puts Blizzard's own proc glow o
 - The Cooldown Manager only tracks **your own** spells' auras.
 - Stack counts are hidden in combat, so only **Maelstrom Weapon** has a stack check.
 
+## Feedback
+Found a bug or have an idea? [Open an issue](https://github.com/califaxop/spellglow-custom-procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
+
 ## Recent changes
+- **1.7.3:** New "Report a bug / suggest" button in the settings, linking to a short feedback form.
 - **1.7.2:** Condition groups (All / Any, joined by AND / OR); Maelstrom Weapon stacks; other stack checks removed.
 - **1.7.1:** Glows on spells cast from macros.
 - **1.7.0:** New tabbed settings window; unlimited buff and debuff conditions.
