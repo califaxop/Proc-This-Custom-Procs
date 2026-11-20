@@ -32,7 +32,7 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 - Stack counts are hidden in combat, so there are no stack checks: use **Instant** rows instead (e.g. Lightning Bolt is instant = 5 Maelstrom Weapon).
 
 ## Feedback
-Found a bug or have an idea? [Open an issue](https://github.com/califaxop/spellglow-custom-procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
+Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
 - **1.10.0:** SpellGlow is now **Proc This!**: same addon, same rules and settings. New command `/procthis` (the old `/sglow` still works).

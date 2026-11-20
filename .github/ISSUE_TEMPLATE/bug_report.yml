@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in SpellGlow doesn't work as it should
+description: Something in Proc This! doesn't work as it should
 labels: ["bug"]
 body:
   - type: markdown
@@ -23,7 +23,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SpellGlow version
+      label: Proc This! version
       description: Shown in your addon list, or on the CurseForge file you installed.
       placeholder: e.g. 1.2.3
     validations:
@@ -38,7 +38,7 @@ body:
     id: debug
     attributes:
       label: Debug output (if you can)
-      description: "Output of /sglow test or /sglow auras. Screenshots are fine too."
+      description: "Output of /procthis test or /procthis auras. Screenshots are fine too."
   - type: textarea
     id: addons
     attributes:
