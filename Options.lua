@@ -532,7 +532,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
         Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(p, p.name))
       end
     end)
-    ns.Print("loaded. Type |cffffff00/spellglow|r to set up your glows.")
+    ns.Print("loaded. Type |cffffff00/procthis|r to set up your glows.")
   end
 end)
 
