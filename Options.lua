@@ -113,7 +113,7 @@ local function BuildEditor(p)
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
       GameTooltip:SetText(self.tracked and "Tracked in the Cooldown Manager" or "Not in the Cooldown Manager", 1, 1, 1)
       GameTooltip:AddLine(self.tracked and "Followed in combat." or
-        "In combat Spell Glow can't see it, and the rule won't glow. Add it to the Cooldown Manager's Tracked Buffs or Tracked Bars.", 0.8, 0.8, 0.8, true)
+        "In combat SpellGlow can't see it, and the rule won't glow. Add it to the Cooldown Manager's Tracked Buffs or Tracked Bars.", 0.8, 0.8, 0.8, true)
       GameTooltip:Show()
     end)
     row.dot:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -453,7 +453,7 @@ local function PageHelp(pg)
   para("Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, " ..
     "and Flame Shock is on your target.", "note")
   sec("The Cooldown Manager is required in combat")
-  para("In combat, the game hides buffs and debuffs from addons. Spell Glow follows them through Blizzard's Cooldown Manager instead, " ..
+  para("In combat, the game hides buffs and debuffs from addons. SpellGlow follows them through Blizzard's Cooldown Manager instead, " ..
     "so turn it on and add every buff and debuff your rules use to its Tracked Buffs or Tracked Bars. " ..
     "A green dot next to a condition means it's tracked; red means the rule can't see it in combat and won't glow.")
   para("The Cooldown Manager only tracks your own spells' auras. Auras that other players put on you or your target " ..
@@ -482,7 +482,7 @@ end
 local function BuildWindow()
   win = UI.Window("SpellGlowWindow", 760, 580)
   win:SetPoint("CENTER")
-  local title = UI.Text(win, "title", "Spell Glow")
+  local title = UI.Text(win, "title", "SpellGlow")
   title:SetPoint("TOPLEFT", 26, -20)
   UI.Text(win, "note", "Custom procs: glow any spell when your conditions are met."):SetPoint("LEFT", title, "RIGHT", 10, -1)
   UI.Tabs(win, { { "Rules", PageRules }, { "Look", PageLook }, { "Help", PageHelp } }, 26, -66, 708, PAGE_H)
@@ -522,9 +522,9 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     -- Esc > Options > AddOns: a button that opens the window
     pcall(function()
       if Settings and Settings.RegisterCanvasLayoutCategory then
-        local p = CreateFrame("Frame"); p.name = "Spell Glow"
+        local p = CreateFrame("Frame"); p.name = "SpellGlow"
         local b = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
-        b:SetSize(180, 22); b:SetText("Open Spell Glow"); b:SetPoint("TOPLEFT", 16, -16)
+        b:SetSize(180, 22); b:SetText("Open SpellGlow"); b:SetPoint("TOPLEFT", 16, -16)
         b:SetScript("OnClick", function()
           if SettingsPanel and SettingsPanel.Close then pcall(SettingsPanel.Close, SettingsPanel, true) end
           if not (win and win:IsShown()) then ns.OpenOptions() end

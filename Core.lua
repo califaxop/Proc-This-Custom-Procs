@@ -5,7 +5,7 @@ ns.name = ADDON
 ns.isSecret = issecretvalue or function() return false end
 ns.canAccess = canaccessvalue or function(v) return not ns.isSecret(v) end
 function ns.Readable(v) return v ~= nil and not ns.isSecret(v) end
-function ns.Print(...) print("|cffffd200Spell Glow:|r", ...) end
+function ns.Print(...) print("|cffffd200SpellGlow:|r", ...) end
 
 -- A rule: glow `spell` (every rank, matched by name) while ALL of its checked conditions hold.
 --   auras       list of aura conditions, all must hold:

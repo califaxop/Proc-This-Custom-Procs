@@ -1,9 +1,9 @@
 ## Interface: 16001
-## Title: Spell Glow
+## Title: SpellGlow
 ## Notes: Retail-style glow on your action bar spells, when the conditions you choose are met.
 ## IconTexture: Interface\AddOns\SpellGlow\media\Logo
 ## Author: You
-## Version: 1.9.0
+## Version: 1.9.1
 ## X-Curse-Project-ID: 1811746
 ## SavedVariables: SpellGlowDB
 
