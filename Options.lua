@@ -113,7 +113,7 @@ local function BuildEditor(p)
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
       GameTooltip:SetText(self.tracked and "Tracked in the Cooldown Manager" or "Not in the Cooldown Manager", 1, 1, 1)
       GameTooltip:AddLine(self.tracked and "Followed in combat." or
-        "In combat SpellGlow can't see it, and the rule won't glow. Add it to the Cooldown Manager's Tracked Buffs or Tracked Bars.", 0.8, 0.8, 0.8, true)
+        "In combat Proc This! can't see it, and the rule won't glow. Add it to the Cooldown Manager's Tracked Buffs or Tracked Bars.", 0.8, 0.8, 0.8, true)
       GameTooltip:Show()
     end)
     row.dot:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -453,7 +453,7 @@ local function PageHelp(pg)
   para("Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, " ..
     "and Flame Shock is on your target.", "note")
   sec("The Cooldown Manager is required in combat")
-  para("In combat, the game hides buffs and debuffs from addons. SpellGlow follows them through Blizzard's Cooldown Manager instead, " ..
+  para("In combat, the game hides buffs and debuffs from addons. Proc This! follows them through Blizzard's Cooldown Manager instead, " ..
     "so turn it on and add every buff and debuff your rules use to its Tracked Buffs or Tracked Bars. " ..
     "A green dot next to a condition means it's tracked; red means the rule can't see it in combat and won't glow.")
   para("The Cooldown Manager only tracks your own spells' auras. Auras that other players put on you or your target " ..
@@ -462,12 +462,12 @@ local function PageHelp(pg)
   sec("Commands")
   para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
     "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
-  para("Instant rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /sglow cast <spell> shows a spell's cast time.", "note")
-  para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
-    "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /sglow cast <spell>  its cast time now")
+  para("Instant rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /procthis cast <spell> shows a spell's cast time.", "note")
+  para("/procthis  opens this window      /procthis test  shows every rule's glow for 3 seconds      " ..
+    "/procthis auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /procthis cast <spell>  its cast time now")
   sec("Feedback")
   local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
-    UI.ShowLink("SpellGlowLinkWindow", "SpellGlow: bugs and ideas", "https://github.com/califaxop/spellglow-custom-procs/issues/new/choose")
+    UI.ShowLink("SpellGlowLinkWindow", "Proc This!: bugs and ideas", "https://github.com/califaxop/spellglow-custom-procs/issues/new/choose")
   end)
   fb:SetPoint("TOPLEFT", 0, y)
   local fbn = UI.Text(pg, "note", "Opens a link to copy: a short form for bugs or ideas.")
@@ -482,7 +482,7 @@ end
 local function BuildWindow()
   win = UI.Window("SpellGlowWindow", 760, 580)
   win:SetPoint("CENTER")
-  local title = UI.Text(win, "title", "SpellGlow")
+  local title = UI.Text(win, "title", "Proc This!")
   title:SetPoint("TOPLEFT", 26, -20)
   UI.Text(win, "note", "Custom procs: glow any spell when your conditions are met."):SetPoint("LEFT", title, "RIGHT", 10, -1)
   UI.Tabs(win, { { "Rules", PageRules }, { "Look", PageLook }, { "Help", PageHelp } }, 26, -66, 708, PAGE_H)
@@ -522,9 +522,9 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     -- Esc > Options > AddOns: a button that opens the window
     pcall(function()
       if Settings and Settings.RegisterCanvasLayoutCategory then
-        local p = CreateFrame("Frame"); p.name = "SpellGlow"
+        local p = CreateFrame("Frame"); p.name = "Proc This!"
         local b = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
-        b:SetSize(180, 22); b:SetText("Open SpellGlow"); b:SetPoint("TOPLEFT", 16, -16)
+        b:SetSize(180, 22); b:SetText("Open Proc This!"); b:SetPoint("TOPLEFT", 16, -16)
         b:SetScript("OnClick", function()
           if SettingsPanel and SettingsPanel.Close then pcall(SettingsPanel.Close, SettingsPanel, true) end
           if not (win and win:IsShown()) then ns.OpenOptions() end
@@ -536,8 +536,9 @@ ev:SetScript("OnEvent", function(_, event, arg1)
   end
 end)
 
-SLASH_SPELLGLOW1 = "/spellglow"
-SLASH_SPELLGLOW2 = "/sglow"
+SLASH_SPELLGLOW1 = "/procthis"
+SLASH_SPELLGLOW2 = "/sglow" -- the old commands still work
+SLASH_SPELLGLOW3 = "/spellglow"
 -- /sglow auras: your target's debuffs and buffs and your own buffs and debuffs, with spell IDs
 -- (only out of combat: in combat the game won't show them to addons)
 local function ListAuras()

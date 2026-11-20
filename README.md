@@ -1,8 +1,8 @@
-# SpellGlow: Custom Procs
+# Proc This!: Custom Procs
 
 **Make any spell light up like a proc, exactly when it matters.**
 
-Pick a spell, set your conditions, and SpellGlow puts Blizzard's own proc glow on it the moment they're met. No more watching buff bars mid-fight.
+Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow on it the moment they're met. No more watching buff bars mid-fight.
 
 ## Highlights
 - **Any spell, any rank:** on Blizzard and FlareUI bars, macros included.
@@ -14,17 +14,17 @@ Pick a spell, set your conditions, and SpellGlow puts Blizzard's own proc glow o
 - **Live status:** each rule tells you why it is or isn't glowing.
 
 ## Quick start
-1. Type `/sglow` and click **+ Add rule**.
+1. Type `/procthis` and click **+ Add rule**.
 2. Name the spell, then add your buffs and debuffs.
-3. Add those auras to Blizzard's **Cooldown Manager** (Tracked Buffs/Bars) so SpellGlow can see them in combat.
+3. Add those auras to Blizzard's **Cooldown Manager** (Tracked Buffs/Bars) so Proc This! can see them in combat.
 
 ## Commands
 | Command | Does |
 |---|---|
-| `/sglow` | Open settings |
-| `/sglow test` | Show every glow for 3 seconds |
-| `/sglow auras` | List auras and spell IDs (out of combat) |
-| `/sglow cast <spell>` | Show a spell's cast time right now |
+| `/procthis` | Open settings |
+| `/procthis test` | Show every glow for 3 seconds |
+| `/procthis auras` | List auras and spell IDs (out of combat) |
+| `/procthis cast <spell>` | Show a spell's cast time right now |
 
 ## Good to know
 - In combat the game hides auras from addons: **track them in the Cooldown Manager**, or the rule can't see them.
@@ -35,7 +35,7 @@ Pick a spell, set your conditions, and SpellGlow puts Blizzard's own proc glow o
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/spellglow-custom-procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
-- **1.9.1:** The addon list and messages say "SpellGlow" (was "Spell Glow").
+- **1.10.0:** SpellGlow is now **Proc This!**: same addon, same rules and settings. New command `/procthis` (the old `/sglow` still works).
 - **1.9.0:** New Instant condition (a spell is instant cast right now) replaces Maelstrom Weapon stack checks; existing stack rules convert.
 - **1.7.3:** New "Report a bug / suggest" button in the settings, linking to a short feedback form.
 - **1.7.2:** Condition groups (All / Any, joined by AND / OR); Maelstrom Weapon stacks; other stack checks removed.
