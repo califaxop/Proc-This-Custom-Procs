@@ -10,9 +10,8 @@ function ns.Print(...) print("|cffffd200Spell Glow:|r", ...) end
 -- A rule: glow `spell` (every rank, matched by name) while ALL of its checked conditions hold.
 --   auras       list of aura conditions, all must hold:
 --               { name = "" (name or ID; blank = the rule's spell), unit = "player" | "target",
---                 kind = "buff" | "debuff", mode = "present" | "missing",
---                 stacks + cmp ("ge" at least, "gt" more than, "le" at most, "lt" less than): Maelstrom
---                 Weapon only, worked out from Lightning Bolt's cast time (Forever hides stack counts)
+--                 kind = "buff" | "debuff" | "instant" (the named spell is instant cast right now;
+--                 mode "present" = is, "missing" = isn't), mode = "present" | "missing",
 --                 mine = true (target auras: only yours), and for your debuffs on a target, the backup
 --                 used in combat when it isn't in the Cooldown Manager: dur (s it lasts, 0 = auto),
 --                 charges / usedBy (used up after that many casts of those spells; 0 = not used up) }
@@ -24,8 +23,8 @@ function ns.Print(...) print("|cffffd200Spell Glow:|r", ...) end
 --   proc        the game flags the spell as a proc
 ns.NEW_RULE = { enabled = true, spell = "", auras = {},
   melee = false, usable = true, ready = true, control = true, combat = false, proc = false }
-ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", stacks = 0, mine = true,
-  dur = 0, charges = 0, usedBy = "", cmp = "ge",
+ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", mine = true,
+  dur = 0, charges = 0, usedBy = "",
   group = 1 }  -- which group it's in (see ns.NormalizeGroups)
 
 ns.DEFAULTS = {
@@ -38,7 +37,7 @@ ns.DEFAULTS = {
     -- the example asked for: Lightning Shield when it's not on you, you're being hit in melee,
     -- and you can cast it (not stunned, enough mana)
     { enabled = true, spell = "Lightning Shield",
-      auras = { { name = "", unit = "player", kind = "buff", mode = "missing", stacks = 0, mine = true, dur = 0, charges = 0, usedBy = "" } },
+      auras = { { name = "", unit = "player", kind = "buff", mode = "missing", mine = true, dur = 0, charges = 0, usedBy = "" } },
       melee = true, usable = true, ready = true, control = true, combat = false, proc = false },
   },
 }
@@ -92,7 +91,7 @@ function ns.LoadDB()
         r.buffs = { { mode = r.buff, name = r.buffName or "", stacks = 0 } }
       end
       for _, b in ipairs(r.buffs or {}) do
-        add({ unit = "player", kind = "buff", mode = b.mode or "present", name = b.name or "", stacks = b.stacks or 0 })
+        add({ unit = "player", kind = "buff", mode = b.mode or "present", name = b.name or "", stacks = b.stacks })
       end
       if r.tdebuff and r.tdebuff ~= "ignore" then
         add({ unit = "target", kind = "debuff", mode = r.tdebuff, name = r.tdebuffName or "",
@@ -109,6 +108,25 @@ function ns.LoadDB()
     for _, k in ipairs({ "buff", "buffName", "buffs", "tdebuff", "tdebuffName", "tdebuffMine", "tdebuffDur",
       "tdebuffCharges", "tdebuffUsedBy", "pdebuff", "pdebuffName", "tbuff", "tbuffName" }) do r[k] = nil end
     for k, v in pairs(ns.NEW_RULE) do if r[k] == nil then r[k] = Copy(v) end end
+    -- stack checks are gone (Forever hides stack counts). Maelstrom Weapon rows become
+    -- Lightning Bolt instant checks: "5 stacks" -> is instant, "fewer than 5" -> isn't instant;
+    -- other stack numbers can't be told apart any more, so the row just needs the buff
+    for _, a in ipairs(r.auras) do
+      if a.stacks ~= nil or a.cmp ~= nil then
+        local n, cmp = math.floor(tonumber(a.stacks) or 0), a.cmp or "ge"
+        local mw = a.name == "Maelstrom Weapon" or (ns.SpellName and a.name == ns.SpellName(408505))
+        if mw and a.mode ~= "missing" and a.unit ~= "target" then
+          local bolt = (ns.SpellName and ns.SpellName(403)) or "Lightning Bolt"
+          if (cmp == "ge" and n >= 5) or (cmp == "eq" and n >= 5) or (cmp == "gt" and n >= 4) then
+            a.kind, a.name, a.mode = "instant", bolt, "present"
+          elseif (cmp == "lt" and n <= 5 and n > 1) or (cmp == "le" and n < 5 and n > 0) then
+            a.kind, a.name, a.mode = "instant", bolt, "missing"
+          end
+        end
+        a.stacks, a.cmp = nil, nil
+      end
+    end
+    SpellGlowDB.boltRaw = nil
     -- rows joined by OR (an earlier test build) -> groups: each OR run becomes an "any" group,
     -- the rest one "all" group
     local hadJoin = false

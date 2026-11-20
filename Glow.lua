@@ -77,20 +77,6 @@ local function GlowFrame(b)
   return glow
 end
 
--- A stack condition as the range it allows: lo = fewest stacks, hi = most (nil = no limit).
--- An active aura has at least 1 stack, so "at least 0/1" is no limit at all.
-local CMP_TEXT = { ge = "at least", gt = "more than", le = "at most", lt = "less than", eq = "exactly" }
-G.CMP_TEXT = CMP_TEXT
-function G.StackRange(a)
-  local n = math.floor(tonumber(a.stacks) or 0)
-  local cmp = a.cmp or "ge"
-  if cmp == "ge" then return (n > 1) and n or nil, nil end
-  if cmp == "gt" then return (n + 1 > 1) and n + 1 or nil, nil end
-  if cmp == "le" then return nil, n end
-  if cmp == "lt" then return nil, n - 1 end
-  if cmp == "eq" then return math.max(1, n), n end
-  return nil, nil
-end
 
 -- set one gate from a hidden value; false if the client can't do it
 local function SetGate(g, gate)
@@ -186,6 +172,20 @@ end
 
 -- One buff / debuff row: true, or false and why.
 function G.CheckAura(rule, a)
+  if a.kind == "instant" then
+    -- "Spell X is (not) instant cast": from its current cast time
+    local sp = ns.AuraName(rule, a)
+    if not sp then return false, "name the spell" end
+    local ct = S.CastTime(sp)
+    if ct == nil then return false, format("can't read %s's cast time", sp) end
+    local instant = ct <= 0
+    if a.mode == "missing" then
+      if instant then return false, format("%s is instant now", sp) end
+      return true
+    end
+    if not instant then return false, format("%s isn't instant (%.1f s cast)", sp, ct / 1000) end
+    return true
+  end
   local an = ns.AuraLabel and ns.AuraLabel(rule, a) or ns.AuraName(rule, a)
   if not an then return false, "name the aura" end
   local who = (a.unit == "target") and "your target" or "you"
@@ -198,19 +198,6 @@ function G.CheckAura(rule, a)
     return true
   end
   if not has then return false, format("%s is not on %s", an, who) end
-  -- Maelstrom Weapon only: its stack count, from Lightning Bolt's cast time
-  if S.IsMaelstrom(an) and a.unit ~= "target" and a.kind ~= "debuff" and a.match ~= "type" then
-    local lo, hi = G.StackRange(a)
-    if lo or hi then
-      local st = S.MaelstromStacks()
-      if st == nil then return false, "can't tell Maelstrom Weapon's stacks (Lightning Bolt's cast time is hidden)" end
-      local need = format("%s %d", G.CMP_TEXT[a.cmp or "ge"] or "at least", tonumber(a.stacks) or 0)
-      if (hi and hi < 1) or (lo and hi and lo > hi) then return false, format("%s: never true while it's active (%s stacks)", an, need) end
-      if (lo and st < lo) or (hi and st > hi) then
-        return false, format("%s: %d stacks (needs %s)", an, st, need)
-      end
-    end
-  end
   return true
 end
 
@@ -283,7 +270,6 @@ function G.Test(seconds)
 end
 
 function G.Update()
-  pcall(S.LearnBoltBase) -- Lightning Bolt's cast time without Maelstrom Weapon (for its stack count)
   -- per spell: "plain" (glow), a gates list (the client decides), or nothing
   local verdict = {}
   local testing = GetTime() < testUntil

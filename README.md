@@ -8,7 +8,7 @@ Pick a spell, set your conditions, and SpellGlow puts Blizzard's own proc glow o
 - **Any spell, any rank:** on Blizzard and FlareUI bars, macros included.
 - **Buffs & debuffs:** on you or your target, active or missing, as many as you like.
 - **Groups with AND / OR:** e.g. *(Buff X or Buff Y) and (Debuff Z and Debuff W)*.
-- **Maelstrom Weapon stacks:** `>=`, `>`, `=`, `<=`, `<` (read from Lightning Bolt's cast time, haste included).
+- **Instant cast:** glow while a spell is instant (or isn't): Maelstrom Weapon at 5, Nature's Swiftness, Presence of Mind, Shadow Trance and more.
 - **Extra checks:** being hit in melee, castable, off cooldown, not stunned, in combat, proc flagged.
 - **Your look:** just the glow, glow + shine, or Blizzard's burst; adjustable size and intensity.
 - **Live status:** each rule tells you why it is or isn't glowing.
@@ -24,17 +24,18 @@ Pick a spell, set your conditions, and SpellGlow puts Blizzard's own proc glow o
 | `/sglow` | Open settings |
 | `/sglow test` | Show every glow for 3 seconds |
 | `/sglow auras` | List auras and spell IDs (out of combat) |
-| `/sglow mw` | Show the Maelstrom Weapon stack reading |
+| `/sglow cast <spell>` | Show a spell's cast time right now |
 
 ## Good to know
 - In combat the game hides auras from addons: **track them in the Cooldown Manager**, or the rule can't see them.
 - The Cooldown Manager only tracks **your own** spells' auras.
-- Stack counts are hidden in combat, so only **Maelstrom Weapon** has a stack check.
+- Stack counts are hidden in combat, so there are no stack checks: use **Instant** rows instead (e.g. Lightning Bolt is instant = 5 Maelstrom Weapon).
 
 ## Feedback
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/spellglow-custom-procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
+- **1.9.0:** New Instant condition (a spell is instant cast right now) replaces Maelstrom Weapon stack checks; existing stack rules convert.
 - **1.7.3:** New "Report a bug / suggest" button in the settings, linking to a short feedback form.
 - **1.7.2:** Condition groups (All / Any, joined by AND / OR); Maelstrom Weapon stacks; other stack checks removed.
 - **1.7.1:** Glows on spells cast from macros.

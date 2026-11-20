@@ -106,35 +106,6 @@ function S.HasBuff(name)
   return known[name] or false, "guess"
 end
 
--- Stacks from the Cooldown Manager icon tracking `name`: a number, the game's hidden number,
--- or nil if it can't be told; plus where it came from.
-local function StacksFromCooldownManager(name)
-  local active, item = FromCooldownManager(name)
-  if active == nil then return nil, "untracked" end
-  if not active then return 0, "cdm" end
-  local data
-  if item and item.GetAuraDataCached then
-    local ok, d = pcall(item.GetAuraDataCached, item)
-    if ok then data = d end
-  end
-  if data == nil or not canAccess(data) then return nil, "no data" end
-  local ok, apps = pcall(function() return data.applications end)
-  if not ok then return nil, "no data" end
-  if isSecret(apps) then return apps, "hidden" end
-  if type(apps) == "number" then return math.max(1, apps), "cdm" end
-  return 1, "cdm" -- active with no stack count: one
-end
-
--- How many stacks of buff `name` you have (see AuraStacks).
-function S.BuffStacks(name)
-  if not S.AurasLocked() and C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
-    local ok, a = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", name, "HELPFUL")
-    if ok and a == nil then return 0, "aura" end
-    if ok and canAccess(a) and Readable(a.applications) then return math.max(1, a.applications), "aura" end
-  end
-  return StacksFromCooldownManager(name)
-end
-
 -- For the settings window: can this buff/debuff be followed in combat?
 function S.Tracked(name) return FromCooldownManager(name) ~= nil end
 function S.BuffTracked(name)
@@ -231,86 +202,19 @@ function S.AuraPresent(a, name)
   return S.HasBuff(name)
 end
 
--- How many stacks: a number, the game's hidden number, or nil; plus where it came from.
-function S.AuraStacks(a, name)
-  if a.unit ~= "target" and a.kind ~= "debuff" then return S.BuffStacks(name) end
-  local unit = (a.unit == "target") and "target" or "player"
-  if not S.AurasLocked() and C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
-    local ok, au = pcall(C_UnitAuras.GetAuraDataBySpellName, unit, name, AuraFilter(a))
-    if ok and au == nil then return 0, "aura" end
-    if ok and canAccess(au) and Readable(au.applications) then return math.max(1, au.applications), "aura" end
-  end
-  return StacksFromCooldownManager(name)
-end
-
 ---------------------------------------------------------------------------
--- Maelstrom Weapon stacks, worked out from Lightning Bolt's cast time: each stack cuts it by 20%
--- (instant at 5). Forever hides the stack count itself in combat, but the cast time stays readable.
--- The 0-stack cast time is learned whenever Maelstrom Weapon isn't on you.
+-- A spell's current cast time (ms), as the game shows it on the tooltip: readable in combat,
+-- and 0 while something makes it instant (Maelstrom Weapon at 5, Nature's Swiftness, Presence
+-- of Mind, Shadow Trance...). nil when the game won't say.
 ---------------------------------------------------------------------------
-local MW_IDS = { 408505, 53817, 51530, 65986 }
-function S.IsMaelstrom(name)
-  if name == "Maelstrom Weapon" then return true end
-  for _, id in ipairs(MW_IDS) do if name and ns.SpellName(id) == name then return true end end
-  return false
-end
-
-local function BoltCastTime()
-  if not (C_Spell and C_Spell.GetSpellInfo) then return nil end
-  local bolt = ns.SpellName(403) or "Lightning Bolt"
-  local ok, info = pcall(C_Spell.GetSpellInfo, bolt)
+function S.CastTime(name)
+  if not (name and C_Spell and C_Spell.GetSpellInfo) then return nil end
+  local ok, info = pcall(C_Spell.GetSpellInfo, name)
   if not ok or type(info) ~= "table" then return nil end
   local okT, ct = pcall(function() return info.castTime end)
   if not okT or type(ct) ~= "number" or isSecret(ct) then return nil end
   return ct
 end
-
-S.BoltCastTime = BoltCastTime
-
--- Your spell haste as a fraction (0.3 = 30%), or nil if the game won't say. Cast times are
--- base / (1 + haste), so taking it out makes the reading immune to haste buffs.
-local function Haste()
-  if not UnitSpellHaste then return nil end
-  local ok, h = pcall(UnitSpellHaste, "player")
-  if not ok or type(h) ~= "number" or isSecret(h) then return nil end
-  return h / 100
-end
-S.Haste = Haste
-
--- Lightning Bolt's cast time with no Maelstrom stacks and no haste (ms): learned whenever Maelstrom
--- Weapon isn't on you, with the haste you had then taken out.
-local boltRaw
-local function RawBase()
-  return boltRaw or (SpellGlowDB and SpellGlowDB.boltRaw) or 2500
-end
-
--- called on every update
-function S.LearnBoltBase()
-  local ct = BoltCastTime()
-  if not ct or ct <= 0 then return end
-  local mw = ns.SpellName(408505) or "Maelstrom Weapon"
-  if not S.HasBuff(mw) then
-    boltRaw = ct * (1 + (Haste() or 0))
-    if SpellGlowDB then SpellGlowDB.boltRaw = boltRaw end
-  end
-end
-
--- Maelstrom Weapon stacks (0-5) from Lightning Bolt's cast time, haste taken into account.
-function S.MaelstromStacks()
-  local ct = BoltCastTime()
-  if not ct then return nil, "cast time hidden" end
-  local mw = ns.SpellName(408505) or "Maelstrom Weapon"
-  if not S.HasBuff(mw) then return 0, "no Maelstrom Weapon" end
-  if ct <= 0 then return 5, "instant" end
-  local h = Haste()
-  local expected = RawBase() / (1 + (h or 0)) -- what it would cast at with 0 stacks right now
-  local n = math.floor((1 - ct / expected) / 0.2 + 0.5)
-  local note = format("%d ms of %d", ct, math.floor(expected + 0.5))
-  if h and h > 0 then note = note .. format(", %d%% haste", math.floor(h * 100 + 0.5)) end
-  if not h then note = note .. ", haste unknown" end
-  return math.max(1, math.min(5, n)), note
-end
-S.BoltBase = function() return math.floor(RawBase() / (1 + (Haste() or 0)) + 0.5) end
 
 ---------------------------------------------------------------------------
 -- Being attacked in melee: any hit, dodge, parry, block or miss on you recently.

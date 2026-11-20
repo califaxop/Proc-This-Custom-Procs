@@ -25,7 +25,8 @@ local CHECKS = {
   { "proc",    "The game flags it as a proc" },
 }
 local UNITS = { { "player", "On me" }, { "target", "On target" } }
-local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" } }
+local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant" } }
+local IMODES = { { "present", "Is" }, { "missing", "Isn't" } }
 local MODES = { { "present", "Active" }, { "missing", "Missing" } }
 
 local function BuildEditor(p)
@@ -93,23 +94,19 @@ local function BuildEditor(p)
     local function refresh() ui.Refresh(); Changed() end
     row.unit = UI.Toggle(row, 70, UNITS, Field(A, "unit"), refresh, "On you or on your target. Click to switch.")
     row.unit:SetPoint("TOPLEFT", 0, 0)
-    row.kind = UI.Toggle(row, 56, KINDS, Field(A, "kind"), refresh, "A buff or a debuff. Click to switch.")
+    row.kind = UI.Toggle(row, 56, KINDS, Field(A, "kind"), refresh,
+      "A buff, a debuff, or Instant: the spell is instant cast right now (Maelstrom Weapon at 5, Nature's Swiftness...). Click to switch.")
+    -- for Instant rows, in place of On me / On target: is or isn't instant
+    row.imode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh, "Glow while the spell is instant cast, or while it isn't. Click to switch.")
+    row.imode:SetPoint("TOPLEFT", 0, 0)
     row.kind:SetPoint("LEFT", row.unit, "RIGHT", 4, 0)
     row.mode = UI.Toggle(row, 62, MODES, Field(A, "mode"), refresh, "Glow while it's active, or while it's missing. Click to switch.")
     row.mode:SetPoint("LEFT", row.kind, "RIGHT", 4, 0)
     row.name = UI.Edit(row, 116, { function() local a = A(); return a and a.name end,
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
-    -- stack count (Maelstrom Weapon only): comparison + number
-    row.ge = UI.Toggle(row, 30, { { "ge", ">=" }, { "gt", ">" }, { "eq", "=" }, { "le", "<=" }, { "lt", "<" } }, Field(A, "cmp"), refresh,
-      "Maelstrom Weapon stacks (read from Lightning Bolt's cast time): at least, more than, exactly, at most or less than. 0 with >= means any.")
-    row.ge:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
-    row.stacks = UI.Edit(row, 26, { function() local a = A(); return a and a.stacks end,
-      function(v) local a = A(); if a then a.stacks = math.max(0, math.min(5, math.floor(tonumber(v) or 0))); refresh() end end },
-      "", false, true)
-    row.stacks:SetPoint("LEFT", row.ge, "RIGHT", 4, 0)
     row.dot = CreateFrame("Frame", nil, row)
-    row.dot:SetSize(12, 12); row.dot:SetPoint("LEFT", row.name, "RIGHT", 82, 0)
+    row.dot:SetSize(12, 12); row.dot:SetPoint("LEFT", row.name, "RIGHT", 10, 0)
     row.dot.tex = row.dot:CreateTexture(nil, "ARTWORK")
     row.dot.tex:SetTexture("Interface\\Buttons\\WHITE8X8"); row.dot.tex:SetSize(8, 8); row.dot.tex:SetPoint("CENTER")
     row.dot:SetScript("OnEnter", function(self)
@@ -153,12 +150,12 @@ local function BuildEditor(p)
       local a = A()
       if not a then return end
       local r = Rule()
-      for _, w in ipairs({ row.unit, row.kind, row.mode, row.name, row.ge, row.stacks, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
-      local an0 = ns.AuraName(r, a)
-      local mwRow = a.mode ~= "missing" and a.unit ~= "target" and a.kind ~= "debuff" and a.match ~= "type" and an0 and ns.State.IsMaelstrom(an0)
-      row.ge:SetShown(mwRow and true or false); row.stacks:SetShown(mwRow and true or false)
+      for _, w in ipairs({ row.unit, row.imode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy }) do w.Refresh() end
+      local instant = a.kind == "instant"
+      row.unit:SetShown(not instant); row.mode:SetShown(not instant); row.imode:SetShown(instant)
       row.dot:ClearAllPoints()
-      if mwRow then row.dot:SetPoint("LEFT", row.stacks, "RIGHT", 8, 0) else row.dot:SetPoint("LEFT", row.name, "RIGHT", 10, 0) end
+      row.dot:SetPoint("LEFT", row.name, "RIGHT", 10, 0)
+      row.dot:SetShown(not instant) -- cast times need no Cooldown Manager
       local tdebuff = a.unit == "target" and a.kind == "debuff"
       for _, w in ipairs(row.extra) do w:SetShown(tdebuff) end
       local an = ns.AuraName(r, a)
@@ -312,17 +309,16 @@ local function BuildEditor(p)
       or "|cffff6060Not on any of Blizzard's action bars.|r"
     for _, a in ipairs(r.auras) do
       local an = ns.AuraName(r, a)
-      if an then
+      if an and a.kind == "instant" then
+        local ct = ns.State.CastTime(an)
+        lines[#lines + 1] = format("%s: %s", an, ct == nil and "|cffffd200cast time hidden|r"
+          or (ct <= 0 and "|cff60ff60instant now|r" or format("%.1f s cast", ct / 1000)))
+      elseif an then
         local has, how = ns.State.AuraPresent(a, an)
         local where = a.unit == "target" and "your target" or "you"
         local state = has == nil and "|cffffd200can't tell|r" or (has and "on " .. where or "not on " .. where)
         local cdm = ns.State.Tracked(an) and "|cff60ff60tracked|r" or "|cffff6060not tracked|r"
-        local stackNote = ""
-        if has and ns.State.IsMaelstrom(an) and a.mode ~= "missing" and a.unit ~= "target" then
-          local st, src = ns.State.MaelstromStacks()
-          stackNote = st and format(", %d stacks (%s)", st, src) or ", stacks: can't tell"
-        end
-        lines[#lines + 1] = format("%s: %s (%s)%s, Cooldown Manager: %s", an, state, HOW[how] or how or "?", stackNote, cdm)
+        lines[#lines + 1] = format("%s: %s (%s), Cooldown Manager: %s", an, state, HOW[how] or how or "?", cdm)
       end
     end
     e.status:SetText(table.concat(lines, "\n"))
@@ -466,9 +462,9 @@ local function PageHelp(pg)
   sec("Commands")
   para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
     "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
-  para("Maelstrom Weapon rows have a stack check (>=, >, =, <=, <): Forever hides stack counts, so it's worked out from Lightning Bolt's cast time (20% faster per stack). /sglow mw shows it.", "note")
+  para("Instant rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /sglow cast <spell> shows a spell's cast time.", "note")
   para("/sglow  opens this window      /sglow test  shows every rule's glow for 3 seconds      " ..
-    "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)")
+    "/sglow auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /sglow cast <spell>  its cast time now")
   sec("Feedback")
   local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
     UI.ShowLink("SpellGlowLinkWindow", "SpellGlow: bugs and ideas", "https://github.com/califaxop/spellglow-custom-procs/issues/new/choose")
@@ -564,18 +560,18 @@ local function ListAuras()
   if not any then ns.Print("no auras found on you or your target.") end
 end
 
--- /sglow mw: Maelstrom Weapon stacks as Spell Glow works them out (Lightning Bolt's cast time)
-local function ShowMaelstrom()
-  local ct = ns.State.BoltCastTime()
-  local st, how = ns.State.MaelstromStacks()
-  local h = ns.State.Haste()
-  ns.Print(format("Maelstrom Weapon%s: Lightning Bolt cast time %s, 0-stack cast time now %s ms, spell haste %s -> %s stacks (%s)",
-    InCombatLockdown() and " (in combat)" or "", ct and (ct .. " ms") or "hidden",
-    tostring(ns.State.BoltBase()), h and (math.floor(h * 100 + 0.5) .. "%") or "unknown", tostring(st or "?"), tostring(how)))
+-- /sglow cast <spell>: its cast time right now (0 = instant), as Instant rows read it
+local function ShowCast(spell)
+  spell = strtrim(spell or "")
+  if spell == "" then spell = ns.SpellName(403) or "Lightning Bolt" end
+  local ct = ns.State.CastTime(spell)
+  ns.Print(format("%s%s: %s", spell, InCombatLockdown() and " (in combat)" or "",
+    ct == nil and "cast time hidden or unknown" or (ct <= 0 and "instant" or format("%d ms cast", ct))))
 end
 
 SlashCmdList.SPELLGLOW = function(msg)
-  if (msg or ""):lower():match("^mw") then ShowMaelstrom(); return end
+  local castArg = (msg or ""):match("^%s*[Cc][Aa][Ss][Tt]%s*(.*)$")
+  if castArg then ShowCast(castArg); return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
   local ok, e = pcall(ns.OpenOptions)
