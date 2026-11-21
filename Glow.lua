@@ -269,9 +269,17 @@ function G.Test(seconds)
   G.Update()
 end
 
+local verdict, lastUpdate, idle = {}, 0, false
 function G.Update()
+  lastUpdate = GetTime()
+  -- no rules: hide whatever still glows once, then there's nothing to do
+  if #ns.db.rules == 0 then
+    if not idle then for _, b in ipairs(Buttons()) do Hide(b) end; idle = true end
+    return
+  end
+  idle = false
   -- per spell: "plain" (glow), a gates list (the client decides), or nothing
-  local verdict = {}
+  wipe(verdict)
   local testing = GetTime() < testUntil
   for _, rule in ipairs(ns.db.rules) do
     local name = ns.RuleSpellName(rule)
@@ -309,11 +317,13 @@ end
 ---------------------------------------------------------------------------
 -- Events: update on anything that can change a condition, plus a light safety tick.
 ---------------------------------------------------------------------------
+-- events can come many times a second in combat (power, auras, cooldowns): update at most
+-- every 0.05 s, which still feels instant
 local pending = false
 local function Soon()
   if pending then return end
   pending = true
-  C_Timer.After(0, function() pending = false; G.Update() end)
+  C_Timer.After(math.max(0, 0.05 - (GetTime() - lastUpdate)), function() pending = false; G.Update() end)
 end
 G.Soon = Soon
 
