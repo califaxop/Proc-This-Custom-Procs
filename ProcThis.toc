@@ -1,11 +1,12 @@
 ## Interface: 16001
 ## Title: Proc This!
 ## Notes: Retail-style glow on your action bar spells, when the conditions you choose are met.
-## IconTexture: Interface\AddOns\SpellGlow\media\Logo
+## IconTexture: Interface\AddOns\ProcThis\media\Logo
 ## Author: You
-## Version: 1.10.1
+## Version: 1.11.0
 ## X-Curse-Project-ID: 1811746
-## SavedVariables: SpellGlowDB
+## SavedVariables: ProcThisDB
+## OptionalDeps: SpellGlow
 
 Core.lua
 State.lua

@@ -74,12 +74,18 @@ function ns.NormalizeGroups(r)
 end
 
 function ns.LoadDB()
-  SpellGlowDB = SpellGlowDB or {}
+  -- first run after the rename: bring over the rules saved under the old SpellGlow folder
+  -- (the small "SpellGlow" carry-over addon that ships alongside loads them for us)
+  if ProcThisDB == nil and type(SpellGlowDB) == "table" then
+    ProcThisDB = Copy(SpellGlowDB)
+    ns.carriedOver = true
+  end
+  ProcThisDB = ProcThisDB or {}
   for k, v in pairs(ns.DEFAULTS) do
-    if SpellGlowDB[k] == nil then SpellGlowDB[k] = Copy(v) end
+    if ProcThisDB[k] == nil then ProcThisDB[k] = Copy(v) end
   end
   -- rules saved by an older version: their separate buff / debuff fields become aura conditions
-  for _, r in ipairs(SpellGlowDB.rules) do
+  for _, r in ipairs(ProcThisDB.rules) do
     if r.auras == nil then
       local au = {}
       local function add(t)
@@ -126,7 +132,7 @@ function ns.LoadDB()
         a.stacks, a.cmp = nil, nil
       end
     end
-    SpellGlowDB.boltRaw = nil
+    ProcThisDB.boltRaw = nil
     -- rows joined by OR (an earlier test build) -> groups: each OR run becomes an "any" group,
     -- the rest one "all" group
     local hadJoin = false
@@ -154,7 +160,7 @@ function ns.LoadDB()
       for k, v in pairs(ns.NEW_AURA) do if c[k] == nil then c[k] = v end end
     end
   end
-  ns.db = SpellGlowDB
+  ns.db = ProcThisDB
 end
 
 ---------------------------------------------------------------------------

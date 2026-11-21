@@ -467,7 +467,7 @@ local function PageHelp(pg)
     "/procthis auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /procthis cast <spell>  its cast time now")
   sec("Feedback")
   local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
-    UI.ShowLink("SpellGlowLinkWindow", "Proc This!: bugs and ideas", "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose")
+    UI.ShowLink("ProcThisLinkWindow", "Proc This!: bugs and ideas", "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose")
   end)
   fb:SetPoint("TOPLEFT", 0, y)
   local fbn = UI.Text(pg, "note", "Opens a link to copy: a short form for bugs or ideas.")
@@ -480,7 +480,7 @@ local function PageHelp(pg)
 end
 
 local function BuildWindow()
-  win = UI.Window("SpellGlowWindow", 760, 580)
+  win = UI.Window("ProcThisWindow", 760, 580)
   win:SetPoint("CENTER")
   local title = UI.Text(win, "title", "Proc This!")
   title:SetPoint("TOPLEFT", 26, -20)
@@ -533,12 +533,15 @@ ev:SetScript("OnEvent", function(_, event, arg1)
       end
     end)
     ns.Print("loaded. Type |cffffff00/procthis|r to set up your glows.")
+    if ns.carriedOver then
+      ns.Print("brought over your SpellGlow rules. You can delete the old SpellGlow folder from your AddOns now.")
+    end
   end
 end)
 
-SLASH_SPELLGLOW1 = "/procthis"
-SLASH_SPELLGLOW2 = "/sglow" -- the old commands still work
-SLASH_SPELLGLOW3 = "/spellglow"
+SLASH_PROCTHIS1 = "/procthis"
+SLASH_PROCTHIS2 = "/sglow" -- the old commands still work
+SLASH_PROCTHIS3 = "/spellglow"
 -- /sglow auras: your target's debuffs and buffs and your own buffs and debuffs, with spell IDs
 -- (only out of combat: in combat the game won't show them to addons)
 local function ListAuras()
@@ -570,7 +573,7 @@ local function ShowCast(spell)
     ct == nil and "cast time hidden or unknown" or (ct <= 0 and "instant" or format("%d ms cast", ct))))
 end
 
-SlashCmdList.SPELLGLOW = function(msg)
+SlashCmdList.PROCTHIS = function(msg)
   local castArg = (msg or ""):match("^%s*[Cc][Aa][Ss][Tt]%s*(.*)$")
   if castArg then ShowCast(castArg); return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
