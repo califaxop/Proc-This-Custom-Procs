@@ -6,7 +6,6 @@
 ## Version: 1.11.1
 ## X-Curse-Project-ID: 1811746
 ## SavedVariables: ProcThisDB
-## OptionalDeps: SpellGlow
 
 Core.lua
 State.lua

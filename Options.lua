@@ -533,9 +533,6 @@ ev:SetScript("OnEvent", function(_, event, arg1)
       end
     end)
     ns.Print("loaded. Type |cffffff00/procthis|r to set up your glows.")
-    if ns.carriedOver then
-      ns.Print("brought over your SpellGlow rules.")
-    end
   end
 end)
 

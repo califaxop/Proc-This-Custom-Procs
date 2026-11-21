@@ -74,12 +74,6 @@ function ns.NormalizeGroups(r)
 end
 
 function ns.LoadDB()
-  -- first run after the rename: bring over the rules saved under the old SpellGlow folder
-  -- (the small "SpellGlow" carry-over addon that ships alongside loads them for us)
-  if ProcThisDB == nil and type(SpellGlowDB) == "table" then
-    ProcThisDB = Copy(SpellGlowDB)
-    ns.carriedOver = true
-  end
   ProcThisDB = ProcThisDB or {}
   for k, v in pairs(ns.DEFAULTS) do
     if ProcThisDB[k] == nil then ProcThisDB[k] = Copy(v) end

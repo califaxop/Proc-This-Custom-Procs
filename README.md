@@ -35,8 +35,8 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
-- **1.11.1:** No more asking you to delete the old SpellGlow folder: leave it, a later update removes it on its own.
-- **1.11.0:** The addon folder is now **ProcThis**. Your rules come over automatically on first login (a small "SpellGlow" carry-over addon ships alongside for that; leave it, a later update removes it on its own).
+- **1.11.1:** The old SpellGlow carry-over folder is gone (the CurseForge app removes it for you). If you never logged in with 1.11.0, your rules start fresh.
+- **1.11.0:** The addon folder is now **ProcThis**. Your rules come over automatically on first login (a small "SpellGlow" carry-over addon shipped alongside for that).
 - **1.10.1:** Login message shows `/procthis`; feedback button links to the new repo.
 - **1.10.0:** SpellGlow is now **Proc This!**: same addon, same rules and settings. New command `/procthis` (the old `/sglow` still works).
 - **1.9.0:** New Instant condition (a spell is instant cast right now) replaces Maelstrom Weapon stack checks; existing stack rules convert.
