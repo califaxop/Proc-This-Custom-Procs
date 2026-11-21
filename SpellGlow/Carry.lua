@@ -1,3 +1,3 @@
 -- SpellGlow was renamed to Proc This! (folder "ProcThis"). This tiny addon only exists so the
 -- game still loads the rules saved under the old SpellGlow name; Proc This! copies them over
--- on its first run. Nothing else happens here. Safe to delete once Proc This! has your rules.
+-- on its first run. Nothing else happens here. Leave it be: a later update removes it on its own.

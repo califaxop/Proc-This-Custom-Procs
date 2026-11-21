@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: Proc This! (carry-over)
-## Notes: Brings your old SpellGlow rules over to Proc This!. Safe to delete after you've logged in once with Proc This!.
+## Notes: Brings your old SpellGlow rules over to Proc This!. Nothing to do: a later update removes it on its own.
 ## Author: You
 ## Version: 1.0
 ## SavedVariables: SpellGlowDB
