@@ -482,6 +482,7 @@ end
 local function BuildWindow()
   win = UI.Window("ProcThisWindow", 760, 580)
   win:SetPoint("CENTER")
+  UI.SetHost(win) -- pop-ups (the bug / idea link) sit over this window
   local title = UI.Text(win, "title", "Proc This!")
   title:SetPoint("TOPLEFT", 26, -20)
   UI.Text(win, "note", "Custom procs: glow any spell when your conditions are met."):SetPoint("LEFT", title, "RIGHT", 10, -1)

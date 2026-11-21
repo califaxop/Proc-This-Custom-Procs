@@ -35,6 +35,7 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
+- **1.11.2:** The "Report a bug / suggest" link box is solid now and stays put over the settings window until you close it.
 - **1.11.1:** The old SpellGlow carry-over folder is gone (the CurseForge app removes it for you). If you never logged in with 1.11.0, your rules start fresh.
 - **1.11.0:** The addon folder is now **ProcThis**. Your rules come over automatically on first login (a small "SpellGlow" carry-over addon shipped alongside for that).
 - **1.10.1:** Login message shows `/procthis`; feedback button links to the new repo.
