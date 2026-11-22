@@ -57,7 +57,7 @@ function G.ForgetSlots() wipe(slotCache) end
 -- (e.g. castable) still work: the client sets their alpha from the hidden value,
 -- without Spell Glow ever reading it.
 local MAX_GATES = 4
-local function GlowFrame(b)
+local function GlowFrame(b, scale)
   local glow = b.SG_Glow
   if not glow then
     b.SG_Gates = {}
@@ -79,8 +79,13 @@ local function GlowFrame(b)
     glow:SetPoint("CENTER", b, "CENTER", 0, 0)
     b.SG_Glow = glow
   end
-  local w, h = b:GetSize()
-  glow:SetSize(w * ns.db.glowScale, h * ns.db.glowScale)
+  scale = scale or ns.db.glowScale or 1.4
+  if b.SG_Scale ~= scale then -- (only when it changes: this runs on every update)
+    b.SG_Scale = scale
+    local w, h = b:GetSize()
+    glow:SetSize(w * scale, h * scale)
+    if b.SG_Shine then b.SG_Shine:SetSize(w * scale, h * scale) end
+  end
   return glow
 end
 
@@ -162,8 +167,8 @@ local function Tint(frame, r, g, b)
   end
 end
 
-local function Start(b, glow)
-  local style = ns.db.glowStyle or "shine"
+local function Start(b, glow, style)
+  style = style or ns.db.glowStyle or "shine"
   glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop()
   if style == "burst" then
     if glow.ProcStartFlipbook then glow.ProcStartFlipbook:SetAlpha(1) end
@@ -184,7 +189,8 @@ end
 
 -- gates: nil/empty = glow plainly; otherwise the hidden conditions the client decides
 local function Show(b, gates, rule)
-  local glow = GlowFrame(b)
+  local style, motion, scale, alpha = ns.RuleLook(rule) -- this rule's look (or the Look tab's)
+  local glow = GlowFrame(b, scale)
   local n = gates and #gates or 0
   for i, g in ipairs(b.SG_Gates) do
     if i <= n then
@@ -193,17 +199,17 @@ local function Show(b, gates, rule)
       g:SetAlpha(1)
     end
   end
-  glow:SetAlpha(ns.db.glowAlpha or 1)
+  glow:SetAlpha(alpha)
   -- colour (and the shine's, so its flare matches)
   local r, gg, bb = ns.RuleGlowRGB(rule)
   Tint(glow, r, gg, bb); Tint(b.SG_Shine, r, gg, bb)
   -- while on: steady, or a gentle pulse
-  if ns.db.glowMotion == "pulse" then
+  if motion == "pulse" then
     if not b.SG_PulseAnim:IsPlaying() then b.SG_PulseAnim:Play() end
   elseif b.SG_PulseAnim:IsPlaying() then
     b.SG_PulseAnim:Stop(); b.SG_Pulse:SetAlpha(1)
   end
-  if not glow:IsShown() then Start(b, glow); Tint(b.SG_Shine, r, gg, bb) end
+  if not glow:IsShown() then Start(b, glow, style); Tint(b.SG_Shine, r, gg, bb) end
 end
 
 -- style or size changed: restart every glow so the change shows

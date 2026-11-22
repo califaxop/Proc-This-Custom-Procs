@@ -61,6 +61,15 @@ function ns.GlowRGB(key, custom)
   for _, c in ipairs(ns.GLOW_COLORS) do if c[1] == key and c[3] then return c[3][1], c[3][2], c[3][3] end end
   return nil
 end
+-- A rule's look: each part is its own, or (nil / "default") the Look tab's default.
+-- Returns style ("glow" | "shine" | "burst"), motion ("steady" | "pulse"), scale, alpha.
+local function Pick(v, def) if v == nil or v == "default" then return def end return v end
+function ns.RuleLook(rule)
+  local d = ns.db
+  return Pick(rule and rule.startStyle, d.glowStyle or "shine"), Pick(rule and rule.motion, d.glowMotion or "steady"),
+    tonumber(Pick(rule and rule.scale, d.glowScale)) or 1.4, tonumber(Pick(rule and rule.alpha, d.glowAlpha)) or 1
+end
+
 -- a rule's glow colour: its own, or the default from the Look tab
 function ns.RuleGlowRGB(rule)
   if rule and rule.color and rule.color ~= "default" then return ns.GlowRGB(rule.color, rule.colorCustom) end
