@@ -218,6 +218,10 @@ local function BuildEditor(p)
     -- for Instant rows, in place of On me / On target: is or isn't instant
     row.imode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh, "Glow while the spell is instant cast, or while it isn't. Click to switch.")
     row.imode:SetPoint("TOPLEFT", 0, 0)
+    -- for Rule rows: the same Is / Isn't, with its own explanation
+    row.rmode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh,
+      "Glow while the rule you pick is active (its conditions are met right now), or while it isn't. Click to switch.")
+    row.rmode:SetPoint("TOPLEFT", 0, 0)
     row.kind:SetPoint("LEFT", row.unit, "RIGHT", 4, 0)
     row.mode = UI.Toggle(row, 62, MODES, Field(A, "mode"), refresh, "Glow while it's active, or while it's missing. Click to switch.")
     row.mode:SetPoint("LEFT", row.kind, "RIGHT", 4, 0)
@@ -297,12 +301,12 @@ local function BuildEditor(p)
       if #row.ruleOpts == 0 then row.ruleOpts[1] = { false, "(add another rule first)" } end
       -- a Rule row points at the first of them until one is picked
       if isRule and (not ns.RuleById(a.rule) or a.rule == r.id) then a.rule = row.ruleOpts[1][1] or nil end
-      for _, w in ipairs({ row.unit, row.imode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.hpMode, row.pct, row.ruleSel }) do w.Refresh() end
+      for _, w in ipairs({ row.unit, row.imode, row.rmode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.hpMode, row.pct, row.ruleSel }) do w.Refresh() end
       local instant = a.kind == "instant"
       local health = a.kind == "health" or a.kind == "mana" -- (both are a % row)
       row.pctSign:SetText(a.kind == "mana" and "% mana" or "% health")
       row.unit:SetShown(not instant and not isRule); row.mode:SetShown(not instant and not health and not isRule)
-      row.imode:SetShown(instant or isRule)
+      row.imode:SetShown(instant); row.rmode:SetShown(isRule)
       row.hpMode:SetShown(health); row.pct:SetShown(health); row.pctSign:SetShown(health)
       row.ruleSel:SetShown(isRule); row.ruleWord:SetShown(isRule)
       row.name:SetShown(not health and not isRule)
