@@ -68,7 +68,14 @@ local function GlowFrame(b)
       b.SG_Gates[i] = g
       parent = g
     end
-    glow = CreateFrame("Frame", nil, parent, "ActionButtonSpellAlertTemplate")
+    -- the pulse ("while on: pulse"): a frame of its own around the glow that gently breathes
+    local pulse = CreateFrame("Frame", nil, parent)
+    pulse:SetAllPoints(b)
+    local ag = pulse:CreateAnimationGroup()
+    ag:SetLooping("BOUNCE")
+    local fade = ag:CreateAnimation("Alpha"); fade:SetFromAlpha(1); fade:SetToAlpha(0.35); fade:SetDuration(0.75); fade:SetSmoothing("IN_OUT")
+    b.SG_Pulse, b.SG_PulseAnim = pulse, ag
+    glow = CreateFrame("Frame", nil, pulse, "ActionButtonSpellAlertTemplate")
     glow:SetPoint("CENTER", b, "CENTER", 0, 0)
     b.SG_Glow = glow
   end
@@ -143,6 +150,18 @@ end
 --   "glow"  = just the looping glow, no start animation
 --   "shine" = the looping glow, with a brief flare when it starts
 --   "burst" = Blizzard's own start (the zoom-in burst), then the loop
+-- the glow's colour: Blizzard's gold art as is, or a grey copy tinted (clean colours, not muddy)
+local function Tint(frame, r, g, b)
+  if not frame then return end
+  for _, key in ipairs({ "ProcStartFlipbook", "ProcLoopFlipbook", "ProcAltGlow" }) do
+    local t = frame[key]
+    if t and t.SetVertexColor then
+      if r then t:SetDesaturated(true); t:SetVertexColor(r, g, b)
+      else t:SetDesaturated(false); t:SetVertexColor(1, 1, 1) end
+    end
+  end
+end
+
 local function Start(b, glow)
   local style = ns.db.glowStyle or "shine"
   glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop()
@@ -164,7 +183,7 @@ local function Start(b, glow)
 end
 
 -- gates: nil/empty = glow plainly; otherwise the hidden conditions the client decides
-local function Show(b, gates)
+local function Show(b, gates, rule)
   local glow = GlowFrame(b)
   local n = gates and #gates or 0
   for i, g in ipairs(b.SG_Gates) do
@@ -175,7 +194,16 @@ local function Show(b, gates)
     end
   end
   glow:SetAlpha(ns.db.glowAlpha or 1)
-  if not glow:IsShown() then Start(b, glow) end
+  -- colour (and the shine's, so its flare matches)
+  local r, gg, bb = ns.RuleGlowRGB(rule)
+  Tint(glow, r, gg, bb); Tint(b.SG_Shine, r, gg, bb)
+  -- while on: steady, or a gentle pulse
+  if ns.db.glowMotion == "pulse" then
+    if not b.SG_PulseAnim:IsPlaying() then b.SG_PulseAnim:Play() end
+  elseif b.SG_PulseAnim:IsPlaying() then
+    b.SG_PulseAnim:Stop(); b.SG_Pulse:SetAlpha(1)
+  end
+  if not glow:IsShown() then Start(b, glow); Tint(b.SG_Shine, r, gg, bb) end
 end
 
 -- style or size changed: restart every glow so the change shows
@@ -362,7 +390,7 @@ function G.Test(seconds)
   G.Update()
 end
 
-local verdict, lastUpdate, idle = {}, 0, false
+local verdict, byRule, lastUpdate, idle = {}, {}, 0, false
 function G.Update()
   lastUpdate = GetTime()
   -- no rules: hide whatever still glows once, then there's nothing to do
@@ -372,19 +400,19 @@ function G.Update()
   end
   idle = false
   -- per spell: "plain" (glow), a gates list (the client decides), or nothing
-  wipe(verdict)
+  wipe(verdict); wipe(byRule) -- byRule: which rule's colour a spell glows in
   local testing = GetTime() < testUntil
   for _, rule in ipairs(ns.db.rules) do
     local name = ns.RuleSpellName(rule)
     if name and verdict[name] ~= "plain" then
       if testing then
-        if rule.enabled then verdict[name] = "plain" end
+        if rule.enabled then verdict[name] = "plain"; byRule[name] = rule end
       else
         local on, _, gates = G.Evaluate(rule)
         if on then
           -- several rules for one spell: a plain yes wins, else the first rule the game decides
-          if not gates or #gates == 0 then verdict[name] = "plain"
-          elseif verdict[name] == nil then verdict[name] = gates end
+          if not gates or #gates == 0 then verdict[name] = "plain"; byRule[name] = rule
+          elseif verdict[name] == nil then verdict[name] = gates; byRule[name] = rule end
         end
       end
     end
@@ -392,8 +420,8 @@ function G.Update()
   for _, b in ipairs(Buttons()) do
     local name = b:IsVisible() and ButtonSpell(b)
     local v = name and verdict[name]
-    if v == "plain" then Show(b, nil)
-    elseif type(v) == "table" then Show(b, v)
+    if v == "plain" then Show(b, nil, byRule[name])
+    elseif type(v) == "table" then Show(b, v, byRule[name])
     else Hide(b) end
   end
 end

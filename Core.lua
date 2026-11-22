@@ -34,6 +34,9 @@ ns.DEFAULTS = {
   glowScale = 1.4,   -- Blizzard's alert size around a button
   glowStyle = "shine", -- "glow" (just the glow), "shine" (brief flare at the start), "burst" (Blizzard's zoom-in start)
   glowAlpha = 1,       -- glow intensity
+  glowColor = "gold",  -- the glow's colour: "gold" (Blizzard's own), a palette key, or "custom"
+  glowCustom = { 1, 1, 1 }, -- the custom colour
+  glowMotion = "steady", -- while on: "steady" or "pulse" (gently breathes)
   flareStyle = true,   -- settings window in FlareUI's style when FlareUI is installed
   rules = {
     -- the example asked for: Lightning Shield when it's not on you, you're being hit in melee,
@@ -43,6 +46,26 @@ ns.DEFAULTS = {
       melee = true, usable = true, ready = true, control = true, combat = false, proc = false },
   },
 }
+
+-- Glow colours. "gold" is Blizzard's own art, untouched; the rest tint a grey copy of it.
+ns.GLOW_COLORS = {
+  { "gold", "Blizzard gold" },
+  { "red", "Red", { 1, 0.22, 0.2 } }, { "orange", "Orange", { 1, 0.55, 0.1 } }, { "yellow", "Yellow", { 1, 0.95, 0.25 } },
+  { "green", "Green", { 0.3, 1, 0.3 } }, { "cyan", "Cyan", { 0.25, 0.9, 1 } }, { "blue", "Blue", { 0.3, 0.55, 1 } },
+  { "purple", "Purple", { 0.75, 0.35, 1 } }, { "pink", "Pink", { 1, 0.4, 0.8 } }, { "white", "White", { 1, 1, 1 } },
+  { "custom", "Custom" },
+}
+-- a colour key -> r, g, b, or nil for Blizzard gold
+function ns.GlowRGB(key, custom)
+  if key == "custom" and type(custom) == "table" then return custom[1], custom[2], custom[3] end
+  for _, c in ipairs(ns.GLOW_COLORS) do if c[1] == key and c[3] then return c[3][1], c[3][2], c[3][3] end end
+  return nil
+end
+-- a rule's glow colour: its own, or the default from the Look tab
+function ns.RuleGlowRGB(rule)
+  if rule and rule.color and rule.color ~= "default" then return ns.GlowRGB(rule.color, rule.colorCustom) end
+  return ns.GlowRGB(ns.db.glowColor, ns.db.glowCustom)
+end
 
 local function Copy(v)
   if type(v) ~= "table" then return v end

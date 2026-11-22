@@ -11,6 +11,73 @@ local function Rule() return ns.db.rules[selected] end
 local function Field(tbl, key) return { function() local t = tbl(); return t and t[key] end, function(v) local t = tbl(); if t then t[key] = v end end } end
 
 local LIST_W, EDIT_X, EDIT_W, PAGE_H = 196, 220, 486, 470
+
+-- Colour picking: the game's colour picker on a { r, g, b } table
+local function OpenColorPicker(color, onChange)
+  if not ColorPickerFrame then return end
+  local r, g, b = color[1], color[2], color[3]
+  local function apply()
+    local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+    color[1], color[2], color[3] = nr, ng, nb
+    onChange()
+  end
+  local function cancel(prev)
+    if prev then
+      color[1] = prev.r or prev[1]; color[2] = prev.g or prev[2]; color[3] = prev.b or prev[3]
+    else
+      color[1], color[2], color[3] = r, g, b
+    end
+    onChange()
+  end
+  if ColorPickerFrame.SetupColorPickerAndShow then
+    ColorPickerFrame:SetupColorPickerAndShow({ r = r, g = g, b = b, hasOpacity = false, swatchFunc = apply, cancelFunc = cancel })
+  else
+    ColorPickerFrame.func, ColorPickerFrame.cancelFunc = apply, cancel
+    ColorPickerFrame.hasOpacity, ColorPickerFrame.previousValues = false, { r = r, g = g, b = b }
+    ColorPickerFrame:SetColorRGB(r, g, b)
+    ColorPickerFrame:Show()
+  end
+end
+
+-- A glow colour choice: a switch through the palette and a swatch showing it; clicking the swatch
+-- picks a custom colour. get/set read and write the key, custom() gives the custom { r, g, b }.
+-- withDefault adds "Default" (the Look tab's colour) first, for a rule's own colour.
+local function ColorChoice(parent, width, get, set, custom, withDefault, onChange, tip)
+  local opts = {}
+  if withDefault then opts[#opts + 1] = { "default", "Default colour" } end
+  for _, c in ipairs(ns.GLOW_COLORS) do opts[#opts + 1] = { c[1], c[2] } end
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetSize(width + 24, 22)
+  local t = UI.Toggle(f, width, opts, { get, set }, function() f.Refresh(); onChange() end, tip)
+  t:SetPoint("LEFT", 0, 0)
+  local sw = CreateFrame("Button", nil, f, "BackdropTemplate")
+  sw:SetSize(18, 18); sw:SetPoint("LEFT", t, "RIGHT", 6, 0)
+  sw:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+  local function rgb()
+    local key = get()
+    if key == "default" or key == nil then return ns.GlowRGB(ns.db.glowColor, ns.db.glowCustom) end
+    return ns.GlowRGB(key, custom())
+  end
+  f.Refresh = function()
+    t.Refresh()
+    local r, g, b = rgb()
+    if r then sw:SetBackdropColor(r, g, b, 1) else sw:SetBackdropColor(1, 0.82, 0, 1) end -- gold
+    sw:SetBackdropBorderColor(0, 0, 0, 1)
+  end
+  sw:SetScript("OnClick", function()
+    local c = custom()
+    if not c then return end
+    local r, g, b = rgb()
+    if r then c[1], c[2], c[3] = r, g, b end -- start from the colour shown
+    set("custom")
+    OpenColorPicker(c, function() f.Refresh(); onChange() end)
+  end)
+  sw:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText("Click to pick any colour", 1, 1, 1); GameTooltip:Show()
+  end)
+  sw:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return f
+end
 local EW = EDIT_W - 16 -- editor content width
 
 ---------------------------------------------------------------------------
@@ -37,9 +104,15 @@ local function BuildEditor(p)
   e.icon = p:CreateTexture(nil, "ARTWORK")
   e.icon:SetSize(26, 26); e.icon:SetPoint("TOPLEFT", 0, 0)
   e.title = UI.Text(p, "title", "")
-  e.title:SetPoint("LEFT", e.icon, "RIGHT", 8, 0); e.title:SetWidth(EW - 140); e.title:SetWordWrap(false)
+  e.title:SetPoint("LEFT", e.icon, "RIGHT", 8, 0); e.title:SetWidth(EW - 290); e.title:SetWordWrap(false)
   e.enabled = UI.Check(p, "Enabled", Field(Rule, "enabled"), 90, function() ui.Refresh(); Changed() end)
   e.enabled:SetPoint("TOPRIGHT", p, "TOPLEFT", EW, -3)
+  e.color = ColorChoice(p, 110,
+    function() local r = Rule(); return r and r.color or "default" end,
+    function(v) local r = Rule(); if r then r.color = v end end,
+    function() local r = Rule(); if not r then return nil end; r.colorCustom = r.colorCustom or { 1, 1, 1 }; return r.colorCustom end,
+    true, Changed, "This rule's glow colour: Default uses the Look tab's. Click to switch; click the swatch for any colour.")
+  e.color:SetPoint("RIGHT", e.enabled, "LEFT", -10, 0)
 
   -- spell
   e.secSpell = UI.Section(p, "Spell to glow", EW)
@@ -307,7 +380,7 @@ local function BuildEditor(p)
   e.Refresh = function()
     local r = Rule()
     local shown = r ~= nil
-    for _, w in ipairs({ e.icon, e.enabled, e.secSpell, e.spell, e.spellNote, e.secAuras, e.cdmNote, e.newGroupBox, e.newGroup,
+    for _, w in ipairs({ e.icon, e.enabled, e.color, e.secSpell, e.spell, e.spellNote, e.secAuras, e.cdmNote, e.newGroupBox, e.newGroup,
       e.secOther, e.secStatus, e.status }) do w:SetShown(shown) end
     for _, cb in ipairs(e.checks) do cb:SetShown(shown) end
     if not r then
@@ -320,7 +393,7 @@ local function BuildEditor(p)
     local name = ns.RuleSpellName(r)
     e.title:SetText(name or "New rule")
     e.icon:SetTexture(name and ns.SpellIcon(name) or "Interface\\Icons\\INV_Misc_QuestionMark")
-    e.enabled.Refresh(); e.spell.Refresh(); e.newGroupBox.Refresh()
+    e.enabled.Refresh(); e.color.Refresh(); e.spell.Refresh(); e.newGroupBox.Refresh()
     for _, cb in ipairs(e.checks) do cb.Refresh() end
     e.Layout()
   end
@@ -491,6 +564,23 @@ local function PageLook(pg)
   local sec4 = UI.Section(pg, "Window style", 330); sec4:SetPoint("TOPLEFT", 370, -124)
   track(UI.Check(pg, "FlareUI style (needs FlareUI)", { function() return ns.db.flareStyle end,
     function(v) ns.db.flareStyle = v end }, 300, function() UI.Restyle(); if ui then ui.Refresh() end end)):SetPoint("TOPLEFT", 370, -156)
+
+  -- the glow's colour (a rule can pick its own in the Rules tab)
+  local sec5 = UI.Section(pg, "Colour", 330); sec5:SetPoint("TOPLEFT", 370, -200)
+  track(ColorChoice(pg, 170, function() return ns.db.glowColor end, function(v) ns.db.glowColor = v end,
+    function() ns.db.glowCustom = ns.db.glowCustom or { 1, 1, 1 }; return ns.db.glowCustom end, false,
+    function() ns.Glow.Restyle() end,
+    "The glow's colour. Blizzard gold is the game's own; others tint it. Click to switch; click the swatch for any colour.")):SetPoint("TOPLEFT", 370, -232)
+  UI.Text(pg, "note", "A rule can have its own colour: next to Enabled in the Rules tab."):SetPoint("TOPLEFT", 370, -260)
+
+  -- while the glow is on
+  local sec6 = UI.Section(pg, "While it's on", 330); sec6:SetPoint("TOPLEFT", 370, -290)
+  for i, m in ipairs({ { "steady", "Steady", "Glows evenly." }, { "pulse", "Pulse", "Gently breathes brighter and dimmer." } }) do
+    local cb = track(UI.Check(pg, m[2], { function() return (ns.db.glowMotion or "steady") == m[1] end,
+      function() ns.db.glowMotion = m[1] end }, 90, function() ns.Glow.Restyle(); for _, w in ipairs(refreshers) do w.Refresh() end end))
+    cb:SetPoint("TOPLEFT", 370, -322 - (i - 1) * 26)
+    UI.Text(pg, "note", m[3]):SetPoint("LEFT", cb, "RIGHT", 4, 0)
+  end
 end
 
 local function PageHelp(pg)
