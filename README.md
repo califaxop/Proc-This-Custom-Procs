@@ -15,17 +15,17 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 - **Live status:** each rule tells you why it is or isn't glowing.
 
 ## Quick start
-1. Type `/procthis` and click **+ Add rule**.
+1. Type `/pt` and click **+ Add rule**.
 2. Name the spell, then add your buffs and debuffs.
 3. Add those auras to Blizzard's **Cooldown Manager** (Tracked Buffs/Bars) so Proc This! can see them in combat.
 
 ## Commands
 | Command | Does |
 |---|---|
-| `/procthis` | Open settings |
-| `/procthis test` | Show every glow for 3 seconds |
-| `/procthis auras` | List auras and spell IDs (out of combat) |
-| `/procthis cast <spell>` | Show a spell's cast time right now |
+| `/pt` (or `/proc`, `/procthis`) | Open settings |
+| `/pt test` | Show every glow for 3 seconds |
+| `/pt auras` | List auras and spell IDs (out of combat) |
+| `/pt cast <spell>` | Show a spell's cast time right now |
 
 ## Good to know
 - In combat the game hides auras from addons: **track them in the Cooldown Manager**, or the rule can't see them.
@@ -39,7 +39,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
-- **1.12.0:** Health conditions: glow a spell while you or your target are below (or at least) a % of health, in combat too.
+- **1.12.0:** Health conditions: glow a spell while you or your target are below (or at least) a % of health, in combat too. Shorter commands: `/pt` or `/proc`.
 - **1.11.4:** Native look: the settings use the game's own tooltip border in bronze (without FlareUI style).
 - **1.11.3:** Lighter in combat: glow checks run at most 20 times a second (still instant to the eye), and nothing runs when you have no rules.
 - **1.11.2:** The "Report a bug / suggest" link box is solid now and stays put over the settings window until you close it.

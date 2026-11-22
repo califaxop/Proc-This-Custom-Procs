@@ -1,4 +1,4 @@
--- Spell Glow: settings window (/spellglow or /sglow, or Esc > Options > AddOns > Spell Glow) and start-up.
+-- Proc This!: settings window (/pt, /proc or /procthis, or Esc > Options > AddOns > Proc This!) and start-up.
 -- Drawn in the same style as XP Planner (see UI.lua): tabs for Rules, Look and Help.
 local _, ns = ...
 local UI = ns.UI
@@ -485,9 +485,9 @@ local function PageHelp(pg)
   para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
     "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
   para("Health rows: your health or your target's, below a % or at least a %. Example: Healing Wave glows while your target is below 40% health. Out of combat Proc This! reads health; in combat the game hides it, so the game itself checks it against your % and switches the glow (Proc This! never sees the number). A dead target never counts.", "note")
-  para("Instant rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /procthis cast <spell> shows a spell's cast time.", "note")
-  para("/procthis  opens this window      /procthis test  shows every rule's glow for 3 seconds      " ..
-    "/procthis auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /procthis cast <spell>  its cast time now")
+  para("Instant rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt cast <spell> shows a spell's cast time.", "note")
+  para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
+    "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /pt cast <spell>  its cast time now")
   sec("Feedback")
   local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
     UI.ShowLink("ProcThisLinkWindow", "Proc This!: bugs and ideas", "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose")
@@ -556,14 +556,16 @@ ev:SetScript("OnEvent", function(_, event, arg1)
         Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(p, p.name))
       end
     end)
-    ns.Print("loaded. Type |cffffff00/procthis|r to set up your glows.")
+    ns.Print("loaded. Type |cffffff00/pt|r to set up your glows.")
   end
 end)
 
-SLASH_PROCTHIS1 = "/procthis"
-SLASH_PROCTHIS2 = "/sglow" -- the old commands still work
-SLASH_PROCTHIS3 = "/spellglow"
--- /sglow auras: your target's debuffs and buffs and your own buffs and debuffs, with spell IDs
+SLASH_PROCTHIS1 = "/pt"
+SLASH_PROCTHIS2 = "/proc"
+SLASH_PROCTHIS3 = "/procthis"
+SLASH_PROCTHIS4 = "/sglow" -- the old commands still work
+SLASH_PROCTHIS5 = "/spellglow"
+-- /pt auras: your target's debuffs and buffs and your own buffs and debuffs, with spell IDs
 -- (only out of combat: in combat the game won't show them to addons)
 local function ListAuras()
   if ns.State.AurasLocked() then
@@ -585,7 +587,7 @@ local function ListAuras()
   if not any then ns.Print("no auras found on you or your target.") end
 end
 
--- /sglow cast <spell>: its cast time right now (0 = instant), as Instant rows read it
+-- /pt cast <spell>: its cast time right now (0 = instant), as Instant rows read it
 local function ShowCast(spell)
   spell = strtrim(spell or "")
   if spell == "" then spell = ns.SpellName(403) or "Lightning Bolt" end
