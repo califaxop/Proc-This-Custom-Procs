@@ -199,6 +199,7 @@ local function BuildEditor(p)
     ns.Glow.Restyle(); ui.Refresh()
   end)
   e.lookAll.tip = "Give every rule this rule's look (colour, start, pulse, size, intensity)."
+  e.lookAll:SetHeight(18) -- slim, to sit on the Look heading above its line
   e.lookParts[#e.lookParts + 1] = e.lookAll
   e.RefreshLook = function()
     for _, w in ipairs({ e.color, e.style, e.motion, e.size, e.alpha }) do w.Refresh() end
@@ -421,12 +422,13 @@ local function BuildEditor(p)
       cb:SetPoint("TOPLEFT", p, "TOPLEFT", (i % 2 == 1) and 0 or 240, y - math.floor((i - 1) / 2) * 24)
     end
     y = y - 3 * 24 - 12
+    -- "Use for all rules" sits at the right end of the Look heading
+    e.lookAll:ClearAllPoints(); e.lookAll:SetPoint("TOPRIGHT", p, "TOPLEFT", EW, y + 1)
     place(e.secLook, 0, 30)
     local function pair(lbl, w, x) lbl:ClearAllPoints(); lbl:SetPoint("TOPLEFT", p, "TOPLEFT", x, y - 4)
       w:ClearAllPoints(); w:SetPoint("TOPLEFT", p, "TOPLEFT", x + 92, y) end
     pair(e.lColorL, e.color, 0)
     e.lookTest:ClearAllPoints(); e.lookTest:SetPoint("TOPLEFT", p, "TOPLEFT", 270, y)
-    e.lookAll:ClearAllPoints(); e.lookAll:SetPoint("LEFT", e.lookTest, "RIGHT", 6, 0)
     y = y - 28
     pair(e.lStyleL, e.style, 0); pair(e.lMotionL, e.motion, 250)
     y = y - 28
