@@ -57,6 +57,16 @@ function G.ForgetSlots() wipe(slotCache) end
 -- (e.g. castable) still work: the client sets their alpha from the hidden value,
 -- without Spell Glow ever reading it.
 local MAX_GATES = 4
+-- Blizzard's burst (the start flipbook) is a fixed 150 px, drawn for its own alert frame of 63 px
+-- (a 45 px button at 1.4x), while the steady glow fills the frame. With any other button size or
+-- glow size the burst would end bigger or smaller than the glow and snap. Keep it in proportion.
+local BURST_RATIO = 150 / 63
+local function FitBurst(frame, w, h) -- w, h: the glow frame's size
+  local t = frame and frame.ProcStartFlipbook
+  if not t then return end
+  if type(w) == "number" and w > 0 then t:SetSize(w * BURST_RATIO, h * BURST_RATIO) end
+end
+
 local function GlowFrame(b, scale)
   local glow = b.SG_Glow
   if not glow then
@@ -80,11 +90,13 @@ local function GlowFrame(b, scale)
     b.SG_Glow = glow
   end
   scale = scale or ns.NEW_RULE.scale
-  if b.SG_Scale ~= scale then -- (only when it changes: this runs on every update)
-    b.SG_Scale = scale
-    local w, h = b:GetSize()
+  local w, h = b:GetSize()
+  -- resized only when the size or the button changes (Edit Mode icon size): this runs on every update
+  if b.SG_Scale ~= scale or b.SG_W ~= w or b.SG_H ~= h then
+    b.SG_Scale, b.SG_W, b.SG_H = scale, w, h
     glow:SetSize(w * scale, h * scale)
     if b.SG_Shine then b.SG_Shine:SetSize(w * scale, h * scale) end
+    FitBurst(glow, w * scale, h * scale); FitBurst(b.SG_Shine, w * scale, h * scale)
   end
   return glow
 end
@@ -134,7 +146,9 @@ local function ShineFrame(b, glow)
     sh:Hide()
     b.SG_Shine = sh
   end
-  sh:SetSize(glow:GetSize())
+  local gw, gh = glow:GetSize()
+  sh:SetSize(gw, gh)
+  FitBurst(sh, gw, gh)
   return sh
 end
 
