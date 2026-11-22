@@ -207,6 +207,51 @@ end
 -- and 0 while something makes it instant (Maelstrom Weapon at 5, Nature's Swiftness, Presence
 -- of Mind, Shadow Trance...). nil when the game won't say.
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- Health: "below / at or above N%" on you or your target.
+-- Out of combat health reads as numbers. In combat the game hides it; then the game itself
+-- applies a step curve to the hidden health (UnitHealthPercent with a curve) and the result
+-- becomes a gate's alpha: 1 when the condition holds, 0 when not. Proc This! never sees it.
+---------------------------------------------------------------------------
+local curves = {}
+function S.HealthCurve(below, pct)
+  if not (C_CurveUtil and C_CurveUtil.CreateCurve and UnitHealthPercent) then return nil end
+  local key = (below and "b" or "a") .. pct
+  if curves[key] ~= nil then return curves[key] or nil end
+  local ok, curve = pcall(function()
+    local c = C_CurveUtil.CreateCurve()
+    local at = pct / 100
+    local yes, no = 1, 0
+    local lo, hi = (below and yes or no), (below and no or yes) -- under the line / from the line up
+    if Enum.LuaCurveType and Enum.LuaCurveType.Step and c.SetType then
+      c:SetType(Enum.LuaCurveType.Step)
+      c:AddPoint(0, lo); c:AddPoint(at, hi)
+    else -- a steep ramp, for clients without step curves
+      c:AddPoint(0, lo); c:AddPoint(math.max(0, at - 0.001), lo); c:AddPoint(at, hi)
+    end
+    return c
+  end)
+  curves[key] = ok and curve or false
+  return ok and curve or nil
+end
+
+-- a unit's health in percent, or nil when the game hides it (or there's no such unit)
+function S.HealthPct(unit)
+  if not UnitExists(unit) then return nil, "none" end
+  local okH, h = pcall(UnitHealth, unit)
+  local okM, m = pcall(UnitHealthMax, unit)
+  if okH and okM and Readable(h) and Readable(m) and type(h) == "number" and type(m) == "number" and m > 0 then
+    return h / m * 100
+  end
+  return nil, "hidden"
+end
+
+function S.IsDead(unit)
+  if not UnitIsDeadOrGhost then return false end
+  local ok, d = pcall(UnitIsDeadOrGhost, unit)
+  return ok and Readable(d) and d and true or false
+end
+
 function S.CastTime(name)
   if not (name and C_Spell and C_Spell.GetSpellInfo) then return nil end
   local ok, info = pcall(C_Spell.GetSpellInfo, name)

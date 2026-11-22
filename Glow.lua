@@ -84,6 +84,13 @@ local function SetGate(g, gate)
     if g.SetAlphaFromBoolean then g:SetAlphaFromBoolean(gate.v, 1, 0); return true end
     return false
   end
+  if gate.kind == "health" then
+    -- the game turns the hidden health into 1 (condition holds) or 0 through the curve
+    if not UnitHealthPercent then return false end
+    local ok, v = pcall(UnitHealthPercent, gate.unit, true, gate.curve)
+    if not ok or v == nil then return false end
+    return (pcall(g.SetAlpha, g, v))
+  end
   return false
 end
 
@@ -170,8 +177,27 @@ function G.Restyle()
   G.Update()
 end
 
--- One buff / debuff row: true, or false and why.
+-- One condition row: true, or false and why. A health row in combat returns true plus a gate
+-- (the game decides it).
 function G.CheckAura(rule, a)
+  if a.kind == "health" then
+    local unit = (a.unit == "target") and "target" or "player"
+    local who = unit == "target" and "your target" or "you"
+    local pct = math.max(1, math.min(100, tonumber(a.pct) or 40))
+    local below = a.hpMode ~= "above"
+    if not UnitExists(unit) then return false, "no target" end
+    if S.IsDead(unit) then return false, who .. (unit == "target" and " is dead" or " are dead") end
+    local hp = S.HealthPct(unit)
+    if hp then
+      local holds
+      if below then holds = hp < pct else holds = hp >= pct end
+      if holds then return true end
+      return false, format("%s at %d%% health (needs %s %d%%)", who, math.floor(hp + 0.5), below and "below" or "at least", pct)
+    end
+    local curve = S.HealthCurve(below, pct)
+    if not curve then return false, format("%s health is hidden in combat, and this client can't check it", who) end
+    return true, nil, { { kind = "health", unit = unit, curve = curve } }
+  end
   if a.kind == "instant" then
     -- "Spell X is (not) instant cast": from its current cast time
     local sp = ns.AuraName(rule, a)
@@ -221,32 +247,52 @@ function G.Evaluate(rule)
   local gids = {}
   for g in pairs(groups) do gids[#gids + 1] = g end
   table.sort(gids)
+  -- Gates (conditions the game decides, like health in combat) can only all-hold together:
+  -- they're layers of alpha that multiply. So within "any one of" (or across OR groups) one
+  -- gated choice can stand in for the rest; two can't.
   local function GroupOK(g)
     local any = (rule.groupModes and rule.groupModes[g]) == "any"
-    local whys = {}
+    local whys, gated, gatedN, mine = {}, nil, 0, {}
     for _, a in ipairs(groups[g]) do
-      local ok, why = G.CheckAura(rule, a)
-      if any and ok then return true end
-      if not any and not ok then return false, why end
-      if not ok then whys[#whys + 1] = why end
+      local ok, why, gs = G.CheckAura(rule, a)
+      if any then
+        if ok and not gs then return true end -- plainly true: enough
+        if ok then gated, gatedN = gs, gatedN + 1 else whys[#whys + 1] = why end
+      else
+        if not ok then return false, why end
+        for _, x in ipairs(gs or {}) do mine[#mine + 1] = x end
+      end
     end
-    if any then return false, (#whys == 1) and whys[1] or ("none of: " .. table.concat(whys, "; or ")) end
-    return true
+    if any then
+      if gatedN == 1 then return true, nil, gated end
+      if gatedN > 1 then return false, "two hidden health checks in one \"any one\" group can't be decided in combat" end
+      return false, (#whys == 1) and whys[1] or ("none of: " .. table.concat(whys, "; or "))
+    end
+    return true, nil, mine
   end
   if #gids > 0 then
     if rule.join == "or" then
-      local whys = {}
-      local okAny = false
+      local whys, gatedSets = {}, {}
+      local okPlain = false
       for _, g in ipairs(gids) do
-        local ok, why = GroupOK(g)
-        if ok then okAny = true; break end
-        whys[#whys + 1] = why
+        local ok, why, gs = GroupOK(g)
+        if ok and (not gs or #gs == 0) then okPlain = true; break end
+        if ok then gatedSets[#gatedSets + 1] = gs else whys[#whys + 1] = why end
       end
-      if not okAny then return false, (#whys == 1) and whys[1] or ("no group holds: " .. table.concat(whys, " / ")) end
+      if not okPlain then
+        if #gatedSets == 1 then
+          for _, x in ipairs(gatedSets[1]) do gates[#gates + 1] = x end
+        elseif #gatedSets > 1 then
+          return false, "two OR groups with hidden health checks can't be decided in combat"
+        else
+          return false, (#whys == 1) and whys[1] or ("no group holds: " .. table.concat(whys, " / "))
+        end
+      end
     else
       for _, g in ipairs(gids) do
-        local ok, why = GroupOK(g)
+        local ok, why, gs = GroupOK(g)
         if not ok then return false, why end
+        for _, x in ipairs(gs or {}) do gates[#gates + 1] = x end
       end
     end
   end
@@ -340,6 +386,9 @@ function G.Init()
     pcall(ev.RegisterUnitEvent, ev, e, "player")
   end
   pcall(ev.RegisterUnitEvent, ev, "UNIT_AURA", "player", "target")
+  -- health rows (outside combat: read; in combat: the game re-applies the curve when we update)
+  pcall(ev.RegisterUnitEvent, ev, "UNIT_HEALTH", "player", "target")
+  pcall(ev.RegisterUnitEvent, ev, "UNIT_MAXHEALTH", "player", "target")
   ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4, a5)
     if event == "UNIT_COMBAT" then
       S.OnUnitCombat(a2, a3, a4, a5)
