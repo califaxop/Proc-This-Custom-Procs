@@ -21,6 +21,8 @@ function ns.Print(...) print("|cffffd200Proc This!:|r", ...) end
 --   control     you have control (not stunned, feared, charmed...)
 --   combat      only while you're in combat
 --   proc        the game flags the spell as a proc
+--   (an aura row can also be kind = "health": unit, hpMode "below" | "above", pct;
+--    or kind = "rule": rule = another rule's id, mode "present" = it's active, "missing" = it isn't)
 ns.NEW_RULE = { enabled = true, spell = "", auras = {},
   melee = false, usable = true, ready = true, control = true, combat = false, proc = false }
 ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", mine = true,
@@ -71,6 +73,34 @@ function ns.NormalizeGroups(r)
   table.sort(r.auras, function(x, y) if x.group ~= y.group then return x.group < y.group end return x._i < y._i end)
   for _, a in ipairs(r.auras) do a._i = nil end
   r.groupModes = modes
+end
+
+-- Every rule has an id that never changes (moving or deleting other rules doesn't break a
+-- "Rule X is active" condition pointing at it).
+function ns.NewRuleId()
+  ProcThisDB.nextRuleId = (ProcThisDB.nextRuleId or 0) + 1
+  return ProcThisDB.nextRuleId
+end
+function ns.EnsureRuleIds()
+  local seen = {}
+  for _, r in ipairs(ProcThisDB.rules or {}) do
+    if r.id == nil or seen[r.id] then r.id = ns.NewRuleId() end
+    seen[r.id] = true
+    if r.id > (ProcThisDB.nextRuleId or 0) then ProcThisDB.nextRuleId = r.id end
+  end
+end
+function ns.RuleById(id)
+  for i, r in ipairs(ns.db and ns.db.rules or {}) do if r.id == id then return r, i end end
+end
+-- a rule as people see it: its spell, plus its place in the list when several rules glow one spell
+function ns.RuleLabel(r)
+  local name = ns.RuleSpellName(r) or "(no spell)"
+  local n, idx = 0, nil
+  for i, x in ipairs(ns.db.rules) do
+    if (ns.RuleSpellName(x) or "") == (ns.RuleSpellName(r) or "") then n = n + 1 end
+    if x == r then idx = i end
+  end
+  return n > 1 and format("%s (#%d)", name, idx or 0) or name
 end
 
 function ns.LoadDB()
@@ -155,6 +185,7 @@ function ns.LoadDB()
     end
   end
   ns.db = ProcThisDB
+  ns.EnsureRuleIds()
 end
 
 ---------------------------------------------------------------------------

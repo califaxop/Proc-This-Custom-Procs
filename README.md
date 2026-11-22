@@ -10,6 +10,7 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 - **Groups with AND / OR:** e.g. *(Buff X or Buff Y) and (Debuff Z and Debuff W)*.
 - **Instant cast:** glow while a spell is instant (or isn't): Maelstrom Weapon at 5, Nature's Swiftness, Presence of Mind, Shadow Trance and more.
 - **Health:** glow while you or your target are below (or at least) a % of health, e.g. Healing Wave when your target drops under 40%. Works in combat too: the game checks it for you.
+- **Rules that depend on rules:** glow while another of your rules is active, or isn't, e.g. Earth Shock while your Flame Shock rule is inactive.
 - **Extra checks:** being hit in melee, castable, off cooldown, not stunned, in combat, proc flagged.
 - **Your look:** just the glow, glow + shine, or Blizzard's burst; adjustable size and intensity.
 - **Live status:** each rule tells you why it is or isn't glowing.
@@ -39,7 +40,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
-- **1.12.0:** Health conditions: glow a spell while you or your target are below (or at least) a % of health, in combat too. Shorter commands: `/pt` or `/proc`.
+- **1.12.0:** Health conditions (you or your target below, or at least, a % of health; in combat too), "Rule X is active / inactive" conditions, and shorter commands: `/pt` or `/proc`.
 - **1.11.4:** Native look: the settings use the game's own tooltip border in bronze (without FlareUI style).
 - **1.11.3:** Lighter in combat: glow checks run at most 20 times a second (still instant to the eye), and nothing runs when you have no rules.
 - **1.11.2:** The "Report a bug / suggest" link box is solid now and stays put over the settings window until you close it.

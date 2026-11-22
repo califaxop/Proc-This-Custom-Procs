@@ -81,7 +81,8 @@ end
 -- set one gate from a hidden value; false if the client can't do it
 local function SetGate(g, gate)
   if gate.kind == "bool" then
-    if g.SetAlphaFromBoolean then g:SetAlphaFromBoolean(gate.v, 1, 0); return true end
+    -- (inverted: open when the hidden value is false, for "Rule X is inactive")
+    if g.SetAlphaFromBoolean then g:SetAlphaFromBoolean(gate.v, gate.invert and 0 or 1, gate.invert and 1 or 0); return true end
     return false
   end
   if gate.kind == "health" then
@@ -196,7 +197,31 @@ function G.CheckAura(rule, a)
     end
     local curve = S.HealthCurve(below, pct)
     if not curve then return false, format("%s health is hidden in combat, and this client can't check it", who) end
-    return true, nil, { { kind = "health", unit = unit, curve = curve } }
+    return true, nil, { { kind = "health", unit = unit, curve = curve, below = below, pct = pct } }
+  end
+  if a.kind == "rule" then
+    -- "Rule X is (not) active": that rule's own conditions met right now
+    local other = ns.RuleById(a.rule)
+    if not other then return false, "pick a rule" end
+    if other == rule then return false, "a rule can't depend on itself" end
+    local label = ns.RuleLabel(other)
+    local on, why, gs = G.Evaluate(other)
+    if a.mode ~= "missing" then
+      if not on then return false, format("rule %s isn't active (%s)", label, why or "?") end
+      return true, nil, gs
+    end
+    if not on then return true end
+    if not gs or #gs == 0 then return false, format("rule %s is active", label) end
+    -- it hangs on a hidden value: "inactive" is that value flipped, which works for one of them
+    if #gs == 1 then
+      local g = gs[1]
+      if g.kind == "bool" then return true, nil, { { kind = "bool", v = g.v, invert = not g.invert } } end
+      if g.kind == "health" then
+        local curve = S.HealthCurve(not g.below, g.pct)
+        if curve then return true, nil, { { kind = "health", unit = g.unit, curve = curve, below = not g.below, pct = g.pct } } end
+      end
+    end
+    return false, format("can't tell in combat whether rule %s is inactive: it hangs on several hidden values", label)
   end
   if a.kind == "instant" then
     -- "Spell X is (not) instant cast": from its current cast time
@@ -229,7 +254,19 @@ end
 
 -- A rule's verdict: on (true/false), why (for the settings window), and the hidden conditions
 -- (gates) the client still has to decide when on is true.
+local evaluating = {}
+local Evaluate
+-- (a rule that needs another rule that needs it back can't be decided: say so instead of looping)
 function G.Evaluate(rule)
+  if evaluating[rule] then return false, "rules depend on each other in a loop" end
+  evaluating[rule] = true
+  local ok, on, why, gates = pcall(Evaluate, rule)
+  evaluating[rule] = nil
+  if not ok then return false, "error: " .. tostring(on) end
+  return on, why, gates
+end
+
+function Evaluate(rule)
   local name = ns.RuleSpellName(rule)
   if not rule.enabled or not name then return false, "off" end
   local gates = {}

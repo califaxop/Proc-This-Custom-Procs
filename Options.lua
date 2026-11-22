@@ -25,7 +25,7 @@ local CHECKS = {
   { "proc",    "The game flags it as a proc" },
 }
 local UNITS = { { "player", "On me" }, { "target", "On target" } }
-local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant" }, { "health", "Health" } }
+local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant" }, { "health", "Health" }, { "rule", "Rule" } }
 local HPMODES = { { "below", "Below" }, { "above", "At least" } }
 local IMODES = { { "present", "Is" }, { "missing", "Isn't" } }
 local MODES = { { "present", "Active" }, { "missing", "Missing" } }
@@ -96,7 +96,7 @@ local function BuildEditor(p)
     row.unit = UI.Toggle(row, 70, UNITS, Field(A, "unit"), refresh, "On you or on your target. Click to switch.")
     row.unit:SetPoint("TOPLEFT", 0, 0)
     row.kind = UI.Toggle(row, 56, KINDS, Field(A, "kind"), refresh,
-      "A buff, a debuff, Instant (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), or Health (yours or your target's, below or at least a %). Click to switch.")
+      "A buff, a debuff, Instant (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health (yours or your target's, below or at least a %), or Rule (another of your rules is active, or isn't). Click to switch.")
     -- for Instant rows, in place of On me / On target: is or isn't instant
     row.imode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh, "Glow while the spell is instant cast, or while it isn't. Click to switch.")
     row.imode:SetPoint("TOPLEFT", 0, 0)
@@ -114,6 +114,14 @@ local function BuildEditor(p)
     row.pct:SetPoint("LEFT", row.hpMode, "RIGHT", 6, 0)
     row.pctSign = UI.Text(row, "line", "% health")
     row.pctSign:SetPoint("LEFT", row.pct, "RIGHT", 4, 0)
+    -- for Rule rows: which other rule (the Is / Isn't switch says active or not)
+    row.ruleOpts = {}
+    row.ruleSel = UI.Toggle(row, 200, row.ruleOpts, { function() local a = A(); return a and a.rule end,
+      function(v) local a = A(); if a then a.rule = v end end }, refresh,
+      "Which rule: click to step through your rules. It's active while its own conditions are met (whether or not its spell is on your bars).")
+    row.ruleSel:SetPoint("LEFT", row.kind, "RIGHT", 4, 0)
+    row.ruleWord = UI.Text(row, "line", "active")
+    row.ruleWord:SetPoint("LEFT", row.ruleSel, "RIGHT", 6, 0)
     row.name = UI.Edit(row, 116, { function() local a = A(); return a and a.name end,
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
@@ -162,15 +170,26 @@ local function BuildEditor(p)
       local a = A()
       if not a then return end
       local r = Rule()
-      for _, w in ipairs({ row.unit, row.imode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.hpMode, row.pct }) do w.Refresh() end
+      local isRule = a.kind == "rule"
+      -- the other rules to pick from (not this one)
+      wipe(row.ruleOpts)
+      for _, x in ipairs(ns.db.rules) do
+        if x ~= r and x.id then row.ruleOpts[#row.ruleOpts + 1] = { x.id, ns.RuleLabel(x) } end
+      end
+      if #row.ruleOpts == 0 then row.ruleOpts[1] = { false, "(add another rule first)" } end
+      -- a Rule row points at the first of them until one is picked
+      if isRule and (not ns.RuleById(a.rule) or a.rule == r.id) then a.rule = row.ruleOpts[1][1] or nil end
+      for _, w in ipairs({ row.unit, row.imode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.hpMode, row.pct, row.ruleSel }) do w.Refresh() end
       local instant = a.kind == "instant"
       local health = a.kind == "health"
-      row.unit:SetShown(not instant); row.mode:SetShown(not instant and not health); row.imode:SetShown(instant)
+      row.unit:SetShown(not instant and not isRule); row.mode:SetShown(not instant and not health and not isRule)
+      row.imode:SetShown(instant or isRule)
       row.hpMode:SetShown(health); row.pct:SetShown(health); row.pctSign:SetShown(health)
-      row.name:SetShown(not health)
+      row.ruleSel:SetShown(isRule); row.ruleWord:SetShown(isRule)
+      row.name:SetShown(not health and not isRule)
       row.dot:ClearAllPoints()
-      row.dot:SetPoint("LEFT", health and row.pctSign or row.name, "RIGHT", 10, 0)
-      row.dot:SetShown(not instant and not health) -- cast times and health need no Cooldown Manager
+      row.dot:SetPoint("LEFT", (health and row.pctSign) or (isRule and row.ruleWord) or row.name, "RIGHT", 10, 0)
+      row.dot:SetShown(not instant and not health and not isRule) -- these need no Cooldown Manager
       local tdebuff = a.unit == "target" and a.kind == "debuff"
       for _, w in ipairs(row.extra) do w:SetShown(tdebuff) end
       local an = ns.AuraName(r, a)
@@ -324,7 +343,15 @@ local function BuildEditor(p)
       or "|cffff6060Not on any of Blizzard's action bars.|r"
     for _, a in ipairs(r.auras) do
       local an = ns.AuraName(r, a)
-      if a.kind == "health" then
+      if a.kind == "rule" then
+        local other = ns.RuleById(a.rule)
+        if other then
+          local on2, _, gs2 = ns.Glow.Evaluate(other)
+          lines[#lines + 1] = format("Rule %s: %s", ns.RuleLabel(other),
+            (on2 and gs2 and #gs2 > 0) and "|cffffd200active when the game says so (hidden values)|r"
+            or (on2 and "|cff60ff60active|r" or "not active"))
+        end
+      elseif a.kind == "health" then
         local unit = a.unit == "target" and "target" or "player"
         local hp, why = ns.State.HealthPct(unit)
         local who = unit == "target" and "Your target's health" or "Your health"
@@ -365,7 +392,8 @@ local function BuildList(p)
   l.content, l.scroll = content, scroll
 
   l.add = UI.Button(p, "+ Add rule", 96, function()
-    table.insert(ns.db.rules, ns.Copy(ns.NEW_RULE))
+    local r = ns.Copy(ns.NEW_RULE); r.id = ns.NewRuleId()
+    table.insert(ns.db.rules, r)
     selected = #ns.db.rules; ui.Refresh(); Changed()
   end)
   l.add:SetPoint("TOPLEFT", l.box, "BOTTOMLEFT", 0, -8)
@@ -484,6 +512,7 @@ local function PageHelp(pg)
   sec("Commands")
   para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
     "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
+  para("Rule rows: another of your rules is active (its conditions are met right now) or isn't. Example: Earth Shock glows while your Flame Shock rule is inactive. A rule can't depend on itself, and rules that depend on each other in a loop never glow.", "note")
   para("Health rows: your health or your target's, below a % or at least a %. Example: Healing Wave glows while your target is below 40% health. Out of combat Proc This! reads health; in combat the game hides it, so the game itself checks it against your % and switches the glow (Proc This! never sees the number). A dead target never counts.", "note")
   para("Instant rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt cast <spell> shows a spell's cast time.", "note")
   para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
