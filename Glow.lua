@@ -57,6 +57,11 @@ function G.ForgetSlots() wipe(slotCache) end
 -- (e.g. castable) still work: the client sets their alpha from the hidden value,
 -- without Spell Glow ever reading it.
 local MAX_GATES = 4
+-- The burst (Blizzard's 0.7 s start) plays on a copy of its own, and the steady glow fades in
+-- under its last part while it fades out: the two overlap, so there's no snap where they meet
+-- (Blizzard's burst ends a little smaller than the glow).
+local BURST_HANDOVER_AT, BURST_HANDOVER = 0.45, 0.25
+
 -- Blizzard's burst (the start flipbook) is a fixed 150 px, drawn for its own alert frame of 63 px
 -- (a 45 px button at 1.4x), while the steady glow fills the frame. With any other button size or
 -- glow size the burst would end bigger or smaller than the glow and snap. Keep it in proportion.
@@ -85,7 +90,15 @@ local function GlowFrame(b, scale)
     ag:SetLooping("BOUNCE")
     local fade = ag:CreateAnimation("Alpha"); fade:SetFromAlpha(1); fade:SetToAlpha(0.35); fade:SetDuration(0.75); fade:SetSmoothing("IN_OUT")
     b.SG_Pulse, b.SG_PulseAnim = pulse, ag
-    glow = CreateFrame("Frame", nil, pulse, "ActionButtonSpellAlertTemplate")
+    -- the steady glow's fade-in under a burst (see Start)
+    local lead = CreateFrame("Frame", nil, pulse)
+    lead:SetAllPoints(b)
+    local la = lead:CreateAnimationGroup()
+    la:SetToFinalAlpha(true)
+    local hold = la:CreateAnimation("Alpha"); hold:SetOrder(1); hold:SetFromAlpha(0); hold:SetToAlpha(0); hold:SetDuration(BURST_HANDOVER_AT)
+    local rise = la:CreateAnimation("Alpha"); rise:SetOrder(2); rise:SetFromAlpha(0); rise:SetToAlpha(1); rise:SetDuration(BURST_HANDOVER); rise:SetSmoothing("OUT")
+    b.SG_Lead, b.SG_LeadAnim = lead, la
+    glow = CreateFrame("Frame", nil, lead, "ActionButtonSpellAlertTemplate")
     glow:SetPoint("CENTER", b, "CENTER", 0, 0)
     b.SG_Glow = glow
   end
@@ -152,6 +165,37 @@ local function ShineFrame(b, glow)
   return sh
 end
 
+-- the burst's own frame (made once per button)
+local function BurstFrame(b, glow)
+  local bf = b.SG_Burst
+  if not bf then
+    bf = CreateFrame("Frame", nil, glow:GetParent():GetParent(), "ActionButtonSpellAlertTemplate") -- beside the glow's fade frame
+    bf:SetPoint("CENTER", b, "CENTER", 0, 0)
+    if bf.ProcLoopFlipbook then bf.ProcLoopFlipbook:SetAlpha(0) end
+    if bf.ProcAltGlow then bf.ProcAltGlow:SetAlpha(0) end
+    -- just the burst: when it ends it doesn't go on into a loop of its own
+    bf.ProcStartAnim:SetScript("OnFinished", function() bf:Hide() end)
+    local out = bf:CreateAnimationGroup()
+    local keep = out:CreateAnimation("Alpha"); keep:SetOrder(1); keep:SetFromAlpha(1); keep:SetToAlpha(1); keep:SetDuration(BURST_HANDOVER_AT)
+    local fall = out:CreateAnimation("Alpha"); fall:SetOrder(2); fall:SetFromAlpha(1); fall:SetToAlpha(0); fall:SetDuration(BURST_HANDOVER); fall:SetSmoothing("IN")
+    out:SetToFinalAlpha(true)
+    bf.SG_Out = out
+    bf:Hide()
+    b.SG_Burst = bf
+  end
+  local gw, gh = glow:GetSize()
+  bf:SetSize(gw, gh)
+  FitBurst(bf, gw, gh)
+  bf:SetFrameLevel(glow:GetFrameLevel() + 1)
+  return bf
+end
+local function StopBurst(b)
+  local bf = b.SG_Burst
+  if bf and bf:IsShown() then bf.ProcStartAnim:Stop(); bf.SG_Out:Stop(); bf:Hide() end
+  if b.SG_LeadAnim and b.SG_LeadAnim:IsPlaying() then b.SG_LeadAnim:Stop() end
+  if b.SG_Lead then b.SG_Lead:SetAlpha(1) end
+end
+
 local function StopShine(b)
   local sh = b.SG_Shine
   if sh and sh:IsShown() then sh.SG_Anim:Stop(); sh.ProcLoop:Stop(); sh:Hide() end
@@ -159,7 +203,7 @@ end
 
 local function Hide(b)
   local glow = b.SG_Glow
-  StopShine(b)
+  StopShine(b); StopBurst(b)
   if not glow or not glow:IsShown() then return end
   glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop()
   glow:Hide()
@@ -184,10 +228,18 @@ end
 local function Start(b, glow, style)
   style = style or ns.NEW_RULE.startStyle
   glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop()
+  StopBurst(b)
   if style == "burst" then
-    if glow.ProcStartFlipbook then glow.ProcStartFlipbook:SetAlpha(1) end
+    -- the glow itself goes straight to its loop, faded in as the burst (on its own frame) fades out
+    if glow.ProcStartFlipbook then glow.ProcStartFlipbook:SetAlpha(0) end
+    if glow.ProcLoopFlipbook then glow.ProcLoopFlipbook:SetAlpha(1) end
     glow:Show()
-    glow.ProcStartAnim:Play()
+    glow.ProcLoop:Play()
+    b.SG_Lead:SetAlpha(0); b.SG_LeadAnim:Play()
+    local bf = BurstFrame(b, glow)
+    if bf.ProcStartFlipbook then bf.ProcStartFlipbook:SetAlpha(1) end
+    bf:SetAlpha(1); bf:Show()
+    bf.ProcStartAnim:Play(); bf.SG_Out:Play()
   else
     if glow.ProcStartFlipbook then glow.ProcStartFlipbook:SetAlpha(0) end
     if glow.ProcLoopFlipbook then glow.ProcLoopFlipbook:SetAlpha(1) end
@@ -216,14 +268,14 @@ local function Show(b, gates, rule)
   glow:SetAlpha(alpha)
   -- colour (and the shine's, so its flare matches)
   local r, gg, bb = ns.RuleGlowRGB(rule)
-  Tint(glow, r, gg, bb); Tint(b.SG_Shine, r, gg, bb)
+  Tint(glow, r, gg, bb); Tint(b.SG_Shine, r, gg, bb); Tint(b.SG_Burst, r, gg, bb)
   -- while on: steady, or a gentle pulse
   if motion == "pulse" then
     if not b.SG_PulseAnim:IsPlaying() then b.SG_PulseAnim:Play() end
   elseif b.SG_PulseAnim:IsPlaying() then
     b.SG_PulseAnim:Stop(); b.SG_Pulse:SetAlpha(1)
   end
-  if not glow:IsShown() then Start(b, glow, style); Tint(b.SG_Shine, r, gg, bb) end
+  if not glow:IsShown() then Start(b, glow, style); Tint(b.SG_Shine, r, gg, bb); Tint(b.SG_Burst, r, gg, bb) end
 end
 
 -- style or size changed: restart every glow so the change shows
