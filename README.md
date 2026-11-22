@@ -11,7 +11,7 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 - **Instant cast:** glow while a spell is instant (or isn't): Maelstrom Weapon at 5, Nature's Swiftness, Presence of Mind, Shadow Trance and more.
 - **Health & mana:** glow while you or your target are below or above a % of health or mana, e.g. Healing Wave when your target drops under 40%, Evocation when your mana is under 20%. Works in combat too: the game checks it for you.
 - **Rules that depend on rules:** glow while another of your rules is active, or isn't, e.g. Earth Shock while your Flame Shock rule is inactive.
-- **Each rule its own look:** colour (Blizzard's gold, red, green, blue... or any colour you pick), how it starts, steady or pulsing, size and intensity. Anything left on Default follows the Look tab.
+- **Each rule its own look:** colour (Blizzard's gold, red, green, blue... or any colour you pick), how it starts, steady or pulsing, size and intensity. A "Use for all rules" button copies one rule's look to every rule.
 - **Extra checks:** being hit in melee, castable, off cooldown, not stunned, in combat, proc flagged.
 - **Your look:** just the glow, glow + shine, or Blizzard's burst; adjustable size and intensity.
 - **Live status:** each rule tells you why it is or isn't glowing.

@@ -24,19 +24,17 @@ function ns.Print(...) print("|cffffd200Proc This!:|r", ...) end
 --   (an aura row can also be kind = "health": unit, hpMode "below" | "above", pct;
 --    or kind = "rule": rule = another rule's id, mode "present" = it's active, "missing" = it isn't)
 ns.NEW_RULE = { enabled = true, spell = "", auras = {},
-  melee = false, usable = true, ready = true, control = true, combat = false, proc = false }
+  melee = false, usable = true, ready = true, control = true, combat = false, proc = false,
+  -- its look
+  color = "gold", colorCustom = { 1, 1, 1 }, startStyle = "shine", motion = "steady", scale = 1.4, alpha = 1 }
 ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", mine = true,
   dur = 0, charges = 0, usedBy = "",
   group = 1 }  -- which group it's in (see ns.NormalizeGroups)
 
 ns.DEFAULTS = {
   meleeWindow = 3,   -- seconds a melee hit on you counts as "being attacked in melee"
-  glowScale = 1.4,   -- Blizzard's alert size around a button
-  glowStyle = "shine", -- "glow" (just the glow), "shine" (brief flare at the start), "burst" (Blizzard's zoom-in start)
-  glowAlpha = 1,       -- glow intensity
-  glowColor = "gold",  -- the glow's colour: "gold" (Blizzard's own), a palette key, or "custom"
-  glowCustom = { 1, 1, 1 }, -- the custom colour
-  glowMotion = "steady", -- while on: "steady" or "pulse" (gently breathes)
+  -- (glowScale / glowStyle / glowAlpha: the old Look tab's one look for all rules; LoadDB copies
+  -- them into each rule once, and nothing else reads them)
   flareStyle = true,   -- settings window in FlareUI's style when FlareUI is installed
   rules = {
     -- the example asked for: Lightning Shield when it's not on you, you're being hit in melee,
@@ -61,19 +59,17 @@ function ns.GlowRGB(key, custom)
   for _, c in ipairs(ns.GLOW_COLORS) do if c[1] == key and c[3] then return c[3][1], c[3][2], c[3][3] end end
   return nil
 end
--- A rule's look: each part is its own, or (nil / "default") the Look tab's default.
--- Returns style ("glow" | "shine" | "burst"), motion ("steady" | "pulse"), scale, alpha.
-local function Pick(v, def) if v == nil or v == "default" then return def end return v end
+-- A rule's look: style ("glow" | "shine" | "burst"), motion ("steady" | "pulse"), scale, alpha
 function ns.RuleLook(rule)
-  local d = ns.db
-  return Pick(rule and rule.startStyle, d.glowStyle or "shine"), Pick(rule and rule.motion, d.glowMotion or "steady"),
-    tonumber(Pick(rule and rule.scale, d.glowScale)) or 1.4, tonumber(Pick(rule and rule.alpha, d.glowAlpha)) or 1
+  local d = ns.NEW_RULE
+  return (rule and rule.startStyle) or d.startStyle, (rule and rule.motion) or d.motion,
+    tonumber(rule and rule.scale) or d.scale, tonumber(rule and rule.alpha) or d.alpha
 end
 
--- a rule's glow colour: its own, or the default from the Look tab
+-- a rule's glow colour: r, g, b, or nil for Blizzard gold
 function ns.RuleGlowRGB(rule)
-  if rule and rule.color and rule.color ~= "default" then return ns.GlowRGB(rule.color, rule.colorCustom) end
-  return ns.GlowRGB(ns.db.glowColor, ns.db.glowCustom)
+  if not rule then return nil end
+  return ns.GlowRGB(rule.color, rule.colorCustom)
 end
 
 local function Copy(v)
@@ -169,7 +165,15 @@ function ns.LoadDB()
     end
     for _, k in ipairs({ "buff", "buffName", "buffs", "tdebuff", "tdebuffName", "tdebuffMine", "tdebuffDur",
       "tdebuffCharges", "tdebuffUsedBy", "pdebuff", "pdebuffName", "tbuff", "tbuffName" }) do r[k] = nil end
-    for k, v in pairs(ns.NEW_RULE) do if r[k] == nil then r[k] = Copy(v) end end
+    -- the look used to be one for all rules (the old Look tab), with "Default" per rule: each rule
+    -- now has its own, so parts left on Default take what that tab had
+    local old = { color = ProcThisDB.glowColor, startStyle = ProcThisDB.glowStyle, motion = ProcThisDB.glowMotion,
+      scale = ProcThisDB.glowScale, alpha = ProcThisDB.glowAlpha }
+    for k, v in pairs(old) do
+      if (r[k] == nil or r[k] == "default") and v ~= nil then r[k] = v end
+    end
+    if r.color == "custom" and r.colorCustom == nil and type(ProcThisDB.glowCustom) == "table" then r.colorCustom = Copy(ProcThisDB.glowCustom) end
+    for k, v in pairs(ns.NEW_RULE) do if r[k] == nil or r[k] == "default" then r[k] = Copy(v) end end
     -- stack checks are gone (Forever hides stack counts). Maelstrom Weapon rows become
     -- Lightning Bolt instant checks: "5 stacks" -> is instant, "fewer than 5" -> isn't instant;
     -- other stack numbers can't be told apart any more, so the row just needs the buff

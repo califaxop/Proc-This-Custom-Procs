@@ -79,7 +79,7 @@ local function GlowFrame(b, scale)
     glow:SetPoint("CENTER", b, "CENTER", 0, 0)
     b.SG_Glow = glow
   end
-  scale = scale or ns.db.glowScale or 1.4
+  scale = scale or ns.NEW_RULE.scale
   if b.SG_Scale ~= scale then -- (only when it changes: this runs on every update)
     b.SG_Scale = scale
     local w, h = b:GetSize()
@@ -168,7 +168,7 @@ local function Tint(frame, r, g, b)
 end
 
 local function Start(b, glow, style)
-  style = style or ns.db.glowStyle or "shine"
+  style = style or ns.NEW_RULE.startStyle
   glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop()
   if style == "burst" then
     if glow.ProcStartFlipbook then glow.ProcStartFlipbook:SetAlpha(1) end
@@ -189,7 +189,7 @@ end
 
 -- gates: nil/empty = glow plainly; otherwise the hidden conditions the client decides
 local function Show(b, gates, rule)
-  local style, motion, scale, alpha = ns.RuleLook(rule) -- this rule's look (or the Look tab's)
+  local style, motion, scale, alpha = ns.RuleLook(rule) -- this rule's look
   local glow = GlowFrame(b, scale)
   local n = gates and #gates or 0
   for i, g in ipairs(b.SG_Gates) do

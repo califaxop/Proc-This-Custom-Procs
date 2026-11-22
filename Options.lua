@@ -41,7 +41,7 @@ end
 
 -- A glow colour choice: a switch through the palette and a swatch showing it; clicking the swatch
 -- picks a custom colour. get/set read and write the key, custom() gives the custom { r, g, b }.
--- withDefault adds "Default" (the Look tab's colour) first, for a rule's own colour.
+-- withDefault adds a "Default colour" choice first.
 local function ColorChoice(parent, width, get, set, custom, withDefault, onChange, tip)
   local opts = {}
   if withDefault then opts[#opts + 1] = { "default", "Default colour" } end
@@ -55,7 +55,7 @@ local function ColorChoice(parent, width, get, set, custom, withDefault, onChang
   sw:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
   local function rgb()
     local key = get()
-    if key == "default" or key == nil then return ns.GlowRGB(ns.db.glowColor, ns.db.glowCustom) end
+    if key == nil then return nil end
     return ns.GlowRGB(key, custom())
   end
   f.Refresh = function()
@@ -150,22 +150,21 @@ local function BuildEditor(p)
     e.checks[i] = UI.Check(p, c[2], Field(Rule, c[1]), 228, Changed)
   end
 
-  -- this rule's look: each part is its own, or Default (the Look tab's)
+  -- this rule's look
   e.secLook = UI.Section(p, "Look", EW)
   e.lookParts = {}
-  local function lookField(key) return { function() local r = Rule(); return r and r[key] or "default" end,
+  local function lookField(key) return { function() local r = Rule(); return r and r[key] or ns.NEW_RULE[key] end,
     function(v) local r = Rule(); if r then r[key] = v end end } end
   local function label(text) local t = UI.Text(p, "note", text); e.lookParts[#e.lookParts + 1] = t; return t end
   e.lColorL = label("Colour")
   e.color = ColorChoice(p, 140, lookField("color")[1], lookField("color")[2],
     function() local r = Rule(); if not r then return nil end; r.colorCustom = r.colorCustom or { 1, 1, 1 }; return r.colorCustom end,
-    true, function() ns.Glow.Restyle() end, "This rule's glow colour. Default uses the Look tab's. Click to switch; click the swatch for any colour.")
+    false, function() ns.Glow.Restyle() end, "This rule's glow colour. Click to switch; click the swatch for any colour.")
   e.lookParts[#e.lookParts + 1] = e.color
-  -- the "Default" choice names what the default is right now
-  e.styleOpts = { { "default", "" }, { "glow", "Just the glow" }, { "shine", "Glow + shine" }, { "burst", "Blizzard burst" } }
-  e.motionOpts = { { "default", "" }, { "steady", "Steady" }, { "pulse", "Pulse" } }
-  e.sizeOpts = { { "default", "" }, { 1, "100%" }, { 1.2, "120%" }, { 1.4, "140%" }, { 1.6, "160%" }, { 1.8, "180%" }, { 2, "200%" } }
-  e.alphaOpts = { { "default", "" }, { 0.4, "40%" }, { 0.6, "60%" }, { 0.8, "80%" }, { 1, "100%" } }
+  e.styleOpts = { { "glow", "Just the glow" }, { "shine", "Glow + shine" }, { "burst", "Blizzard burst" } }
+  e.motionOpts = { { "steady", "Steady" }, { "pulse", "Pulse" } }
+  e.sizeOpts = { { 1, "100%" }, { 1.2, "120%" }, { 1.4, "140%" }, { 1.6, "160%" }, { 1.8, "180%" }, { 2, "200%" } }
+  e.alphaOpts = { { 0.4, "40%" }, { 0.6, "60%" }, { 0.8, "80%" }, { 1, "100%" } }
   e.lStyleL = label("When it starts")
   e.style = UI.Toggle(p, 140, e.styleOpts, lookField("startStyle"), function() ns.Glow.Restyle(); ui.Refresh() end,
     "How the glow starts: just the glow, a brief shine, or Blizzard's burst. Click to switch.")
@@ -181,13 +180,27 @@ local function BuildEditor(p)
   for _, w in ipairs({ e.style, e.motion, e.size, e.alpha }) do e.lookParts[#e.lookParts + 1] = w end
   e.lookTest = UI.Button(p, "Test glow", 90, function() ns.Glow.Test(3) end)
   e.lookParts[#e.lookParts + 1] = e.lookTest
+  -- copy this rule's look to every rule (a second click within 5 seconds confirms)
+  local LOOK_KEYS = { "color", "startStyle", "motion", "scale", "alpha" }
+  e.lookAll = UI.Button(p, "Use for all rules", 130, function()
+    local r = Rule(); if not r then return end
+    local now = GetTime and GetTime() or 0
+    if e.allPending ~= r or now - (e.allAt or 0) > 5 then
+      e.allPending, e.allAt = r, now
+      ns.Print("click \"Use for all rules\" again to give every rule this look.")
+      return
+    end
+    e.allPending = nil
+    for _, x in ipairs(ns.db.rules) do
+      for _, k in ipairs(LOOK_KEYS) do x[k] = r[k] end
+      x.colorCustom = ns.Copy(r.colorCustom or { 1, 1, 1 })
+    end
+    ns.Print("every rule now has this look.")
+    ns.Glow.Restyle(); ui.Refresh()
+  end)
+  e.lookAll.tip = "Give every rule this rule's look (colour, start, pulse, size, intensity)."
+  e.lookParts[#e.lookParts + 1] = e.lookAll
   e.RefreshLook = function()
-    local NAMES = { glow = "Just the glow", shine = "Glow + shine", burst = "Blizzard burst", steady = "Steady", pulse = "Pulse" }
-    local d = ns.db
-    e.styleOpts[1][2] = "Default (" .. (NAMES[d.glowStyle or "shine"] or "?") .. ")"
-    e.motionOpts[1][2] = "Default (" .. (NAMES[d.glowMotion or "steady"] or "?") .. ")"
-    e.sizeOpts[1][2] = format("Default (%d%%)", math.floor((d.glowScale or 1.4) * 100 + 0.5))
-    e.alphaOpts[1][2] = format("Default (%d%%)", math.floor((d.glowAlpha or 1) * 100 + 0.5))
     for _, w in ipairs({ e.color, e.style, e.motion, e.size, e.alpha }) do w.Refresh() end
   end
 
@@ -413,6 +426,7 @@ local function BuildEditor(p)
       w:ClearAllPoints(); w:SetPoint("TOPLEFT", p, "TOPLEFT", x + 92, y) end
     pair(e.lColorL, e.color, 0)
     e.lookTest:ClearAllPoints(); e.lookTest:SetPoint("TOPLEFT", p, "TOPLEFT", 270, y)
+    e.lookAll:ClearAllPoints(); e.lookAll:SetPoint("LEFT", e.lookTest, "RIGHT", 6, 0)
     y = y - 28
     pair(e.lStyleL, e.style, 0); pair(e.lMotionL, e.motion, 250)
     y = y - 28
@@ -582,53 +596,19 @@ local function PageRules(pg)
     Status = function() editor.UpdateStatus(); scroll.Update() end }
 end
 
-local function PageLook(pg)
-  local function pct(v) return math.floor(v * 100 + 0.5) .. "%" end
+local function PageSettings(pg)
   local function S(key) return { function() return ns.db[key] end, function(v) ns.db[key] = v end } end
-  local sec = UI.Section(pg, "Default glow", 330); sec:SetPoint("TOPLEFT", 0, 0)
-  track(UI.Slider(pg, "Size", 320, 1, 2, 0.05, S("glowScale"), pct, Changed)):SetPoint("TOPLEFT", 0, -32)
-  track(UI.Slider(pg, "Intensity", 320, 0.2, 1, 0.05, S("glowAlpha"), pct, Changed)):SetPoint("TOPLEFT", 0, -74)
-
-  local sec2 = UI.Section(pg, "Default start", 330); sec2:SetPoint("TOPLEFT", 0, -124)
-  local STYLES = {
-    { "glow", "Just the glow", "Fades straight into the glow." },
-    { "shine", "Glow + shine", "Flares brighter for a moment, then settles." },
-    { "burst", "Blizzard burst", "Blizzard's proc start: grows past the button." },
-  }
-  for i, st in ipairs(STYLES) do
-    local cb = track(UI.Check(pg, st[2], { function() return ns.db.glowStyle == st[1] end,
-      function() ns.db.glowStyle = st[1] end }, 150, function() ns.Glow.Test(3); for _, w in ipairs(refreshers) do w.Refresh() end end))
-    cb:SetPoint("TOPLEFT", 0, -156 - (i - 1) * 26)
-    UI.Text(pg, "note", st[3]):SetPoint("LEFT", cb, "RIGHT", 4, 0)
-  end
-  UI.Button(pg, "Test glow (3 s)", 140, function() ns.Glow.Test(3) end):SetPoint("TOPLEFT", 0, -244)
-
-  local sec3 = UI.Section(pg, "Timing", 330); sec3:SetPoint("TOPLEFT", 370, 0)
+  local sec3 = UI.Section(pg, "Timing", 330); sec3:SetPoint("TOPLEFT", 0, 0)
   track(UI.Slider(pg, "A melee hit on me counts for", 330, 1, 10, 1, S("meleeWindow"),
-    function(v) return v .. " s" end, Changed)):SetPoint("TOPLEFT", 370, -32)
-  UI.Text(pg, "note", "Used by the \"Being attacked in melee\" condition."):SetPoint("TOPLEFT", 370, -72)
+    function(v) return v .. " s" end, Changed)):SetPoint("TOPLEFT", 0, -32)
+  UI.Text(pg, "note", "Used by the \"Being attacked in melee\" condition."):SetPoint("TOPLEFT", 0, -72)
 
-  local sec4 = UI.Section(pg, "Window style", 330); sec4:SetPoint("TOPLEFT", 370, -124)
+  local sec4 = UI.Section(pg, "Window style", 330); sec4:SetPoint("TOPLEFT", 370, 0)
   track(UI.Check(pg, "FlareUI style (needs FlareUI)", { function() return ns.db.flareStyle end,
-    function(v) ns.db.flareStyle = v end }, 300, function() UI.Restyle(); if ui then ui.Refresh() end end)):SetPoint("TOPLEFT", 370, -156)
+    function(v) ns.db.flareStyle = v end }, 300, function() UI.Restyle(); if ui then ui.Refresh() end end)):SetPoint("TOPLEFT", 370, -32)
 
-  -- the glow's colour (a rule can pick its own in the Rules tab)
-  local sec5 = UI.Section(pg, "Default colour", 330); sec5:SetPoint("TOPLEFT", 370, -200)
-  track(ColorChoice(pg, 170, function() return ns.db.glowColor end, function(v) ns.db.glowColor = v end,
-    function() ns.db.glowCustom = ns.db.glowCustom or { 1, 1, 1 }; return ns.db.glowCustom end, false,
-    function() ns.Glow.Restyle() end,
-    "The glow's colour. Blizzard gold is the game's own; others tint it. Click to switch; click the swatch for any colour.")):SetPoint("TOPLEFT", 370, -232)
-  local n5 = UI.Text(pg, "note", "These are the defaults. Each rule can set its own look in the Rules tab (its Look section); parts left on Default follow these.")
-  n5:SetPoint("TOPLEFT", 370, -260); n5:SetWidth(330)
-
-  -- while the glow is on
-  local sec6 = UI.Section(pg, "Default while it's on", 330); sec6:SetPoint("TOPLEFT", 370, -296)
-  for i, m in ipairs({ { "steady", "Steady", "Glows evenly." }, { "pulse", "Pulse", "Gently breathes brighter and dimmer." } }) do
-    local cb = track(UI.Check(pg, m[2], { function() return (ns.db.glowMotion or "steady") == m[1] end,
-      function() ns.db.glowMotion = m[1] end }, 90, function() ns.Glow.Restyle(); for _, w in ipairs(refreshers) do w.Refresh() end end))
-    cb:SetPoint("TOPLEFT", 370, -328 - (i - 1) * 26)
-    UI.Text(pg, "note", m[3]):SetPoint("LEFT", cb, "RIGHT", 4, 0)
-  end
+  local note = UI.Text(pg, "note", "Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, in the Rules tab.")
+  note:SetPoint("TOPLEFT", 0, -112); note:SetWidth(700)
 end
 
 local function PageHelp(pg)
@@ -679,7 +659,7 @@ local function BuildWindow()
   local title = UI.Text(win, "title", "Proc This!")
   title:SetPoint("TOPLEFT", 26, -20)
   UI.Text(win, "note", "Custom procs: glow any spell when your conditions are met."):SetPoint("LEFT", title, "RIGHT", 10, -1)
-  UI.Tabs(win, { { "Rules", PageRules }, { "Look", PageLook }, { "Help", PageHelp } }, 26, -66, 708, PAGE_H)
+  UI.Tabs(win, { { "Rules", PageRules }, { "Settings", PageSettings }, { "Help", PageHelp } }, 26, -66, 708, PAGE_H)
 
   win:SetScript("OnShow", function(self)
     local fit = (UIParent:GetHeight() - 40) / self:GetHeight()
