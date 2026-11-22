@@ -25,8 +25,8 @@ local CHECKS = {
   { "proc",    "The game flags it as a proc" },
 }
 local UNITS = { { "player", "On me" }, { "target", "On target" } }
-local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant" }, { "health", "Health" }, { "rule", "Rule" } }
-local HPMODES = { { "below", "Below" }, { "above", "At least" } }
+local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant" }, { "health", "Health" }, { "mana", "Mana" }, { "rule", "Rule" } }
+local HPMODES = { { "below", "Below" }, { "above", "Above" } }
 local IMODES = { { "present", "Is" }, { "missing", "Isn't" } }
 local MODES = { { "present", "Active" }, { "missing", "Missing" } }
 
@@ -96,7 +96,7 @@ local function BuildEditor(p)
     row.unit = UI.Toggle(row, 70, UNITS, Field(A, "unit"), refresh, "On you or on your target. Click to switch.")
     row.unit:SetPoint("TOPLEFT", 0, 0)
     row.kind = UI.Toggle(row, 56, KINDS, Field(A, "kind"), refresh,
-      "A buff, a debuff, Instant (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health (yours or your target's, below or at least a %), or Rule (another of your rules is active, or isn't). Click to switch.")
+      "A buff, a debuff, Instant (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health or Mana (yours or your target's, below or above a %), or Rule (another of your rules is active, or isn't). Click to switch.")
     -- for Instant rows, in place of On me / On target: is or isn't instant
     row.imode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh, "Glow while the spell is instant cast, or while it isn't. Click to switch.")
     row.imode:SetPoint("TOPLEFT", 0, 0)
@@ -106,7 +106,7 @@ local function BuildEditor(p)
     -- for Health rows, in place of Active / Missing and the name: below / at least N %
     row.hpMode = UI.Toggle(row, 62, HPMODES, { function() local a = A(); return a and a.hpMode or "below" end,
       function(v) local a = A(); if a then a.hpMode = v end end }, refresh,
-      "Glow while health is below the %, or at least the %. Click to switch.")
+      "Glow while it's below the %, or above it. Click to switch.")
     row.hpMode:SetPoint("LEFT", row.kind, "RIGHT", 4, 0)
     row.pct = UI.Edit(row, 40, { function() local a = A(); return a and (a.pct or 40) end,
       function(v) local a = A(); if a then a.pct = math.max(1, math.min(100, math.floor(tonumber(v) or 40))); refresh() end end },
@@ -181,7 +181,8 @@ local function BuildEditor(p)
       if isRule and (not ns.RuleById(a.rule) or a.rule == r.id) then a.rule = row.ruleOpts[1][1] or nil end
       for _, w in ipairs({ row.unit, row.imode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.hpMode, row.pct, row.ruleSel }) do w.Refresh() end
       local instant = a.kind == "instant"
-      local health = a.kind == "health"
+      local health = a.kind == "health" or a.kind == "mana" -- (both are a % row)
+      row.pctSign:SetText(a.kind == "mana" and "% mana" or "% health")
       row.unit:SetShown(not instant and not isRule); row.mode:SetShown(not instant and not health and not isRule)
       row.imode:SetShown(instant or isRule)
       row.hpMode:SetShown(health); row.pct:SetShown(health); row.pctSign:SetShown(health)
@@ -351,13 +352,15 @@ local function BuildEditor(p)
             (on2 and gs2 and #gs2 > 0) and "|cffffd200active when the game says so (hidden values)|r"
             or (on2 and "|cff60ff60active|r" or "not active"))
         end
-      elseif a.kind == "health" then
+      elseif a.kind == "health" or a.kind == "mana" then
         local unit = a.unit == "target" and "target" or "player"
-        local hp, why = ns.State.HealthPct(unit)
-        local who = unit == "target" and "Your target's health" or "Your health"
-        lines[#lines + 1] = format("%s: %s (glows %s %d%%)", who,
-          hp and format("%d%%", math.floor(hp + 0.5)) or (why == "none" and "no target" or "|cffffd200hidden in combat: the game decides|r"),
-          a.hpMode == "above" and "at least" or "below", tonumber(a.pct) or 40)
+        local v, why
+        if a.kind == "health" then v, why = ns.State.HealthPct(unit) else v, why = ns.State.ManaPct(unit) end
+        local who = (unit == "target" and "Your target's " or "Your ") .. a.kind
+        local now = v and format("%d%%", math.floor(v + 0.5))
+          or (why == "none" and "no target") or (why == "nomana" and "no mana")
+          or "|cffffd200hidden: the game decides|r"
+        lines[#lines + 1] = format("%s: %s (glows %s %d%%)", who, now, a.hpMode == "above" and "above" or "below", tonumber(a.pct) or 40)
       elseif an and a.kind == "instant" then
         local ct = ns.State.CastTime(an)
         lines[#lines + 1] = format("%s: %s", an, ct == nil and "|cffffd200cast time hidden|r"
@@ -513,7 +516,7 @@ local function PageHelp(pg)
   para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
     "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
   para("Rule rows: another of your rules is active (its conditions are met right now) or isn't. Example: Earth Shock glows while your Flame Shock rule is inactive. A rule can't depend on itself, and rules that depend on each other in a loop never glow.", "note")
-  para("Health rows: your health or your target's, below a % or at least a %. Example: Healing Wave glows while your target is below 40% health. Out of combat Proc This! reads health; in combat the game hides it, so the game itself checks it against your % and switches the glow (Proc This! never sees the number). A dead target never counts.", "note")
+  para("Health and Mana rows: yours or your target's, below or above a %. Example: Healing Wave glows while your target is below 40% health; Evocation while your mana is below 20%. When the game hides the value (health in combat, your mana always), the game itself checks it against your % and switches the glow: Proc This! never sees the number. A dead target, or one without mana, never counts.", "note")
   para("Instant rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt cast <spell> shows a spell's cast time.", "note")
   para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
     "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /pt cast <spell>  its cast time now")

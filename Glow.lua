@@ -85,10 +85,16 @@ local function SetGate(g, gate)
     if g.SetAlphaFromBoolean then g:SetAlphaFromBoolean(gate.v, gate.invert and 0 or 1, gate.invert and 1 or 0); return true end
     return false
   end
-  if gate.kind == "health" then
-    -- the game turns the hidden health into 1 (condition holds) or 0 through the curve
-    if not UnitHealthPercent then return false end
-    local ok, v = pcall(UnitHealthPercent, gate.unit, true, gate.curve)
+  if gate.kind == "pct" then
+    -- the game turns the hidden health / mana into 1 (condition holds) or 0 through the curve
+    local ok, v
+    if gate.what == "health" then
+      if not UnitHealthPercent then return false end
+      ok, v = pcall(UnitHealthPercent, gate.unit, true, gate.curve)
+    else
+      if not UnitPowerPercent then return false end
+      ok, v = pcall(UnitPowerPercent, gate.unit, (Enum and Enum.PowerType and Enum.PowerType.Mana) or 0, false, gate.curve)
+    end
     if not ok or v == nil then return false end
     return (pcall(g.SetAlpha, g, v))
   end
@@ -181,23 +187,26 @@ end
 -- One condition row: true, or false and why. A health row in combat returns true plus a gate
 -- (the game decides it).
 function G.CheckAura(rule, a)
-  if a.kind == "health" then
+  if a.kind == "health" or a.kind == "mana" then
+    local what = a.kind
     local unit = (a.unit == "target") and "target" or "player"
     local who = unit == "target" and "your target" or "you"
     local pct = math.max(1, math.min(100, tonumber(a.pct) or 40))
-    local below = a.hpMode ~= "above"
+    local mode = (a.hpMode == "above") and "above" or "below"
+    local words = mode == "below" and "below" or "above"
     if not UnitExists(unit) then return false, "no target" end
     if S.IsDead(unit) then return false, who .. (unit == "target" and " is dead" or " are dead") end
-    local hp = S.HealthPct(unit)
-    if hp then
-      local holds
-      if below then holds = hp < pct else holds = hp >= pct end
-      if holds then return true end
-      return false, format("%s at %d%% health (needs %s %d%%)", who, math.floor(hp + 0.5), below and "below" or "at least", pct)
+    local v, why
+    if what == "health" then v, why = S.HealthPct(unit) else v, why = S.ManaPct(unit) end
+    if why == "nomana" then return false, who .. (unit == "target" and " has no mana" or " have no mana") end
+    if v then
+      if S.Meets(mode, v, pct) then return true end
+      return false, format("%s at %d%% %s (needs %s %d%%)", who, math.floor(v + 0.5), what, words, pct)
     end
-    local curve = S.HealthCurve(below, pct)
-    if not curve then return false, format("%s health is hidden in combat, and this client can't check it", who) end
-    return true, nil, { { kind = "health", unit = unit, curve = curve, below = below, pct = pct } }
+    local curve = S.StepCurve(mode, pct)
+    local api = (what == "health") and UnitHealthPercent or UnitPowerPercent
+    if not (curve and api) then return false, format("%s %s is hidden, and this client can't check it", who, what) end
+    return true, nil, { { kind = "pct", what = what, unit = unit, mode = mode, pct = pct, curve = curve } }
   end
   if a.kind == "rule" then
     -- "Rule X is (not) active": that rule's own conditions met right now
@@ -216,9 +225,10 @@ function G.CheckAura(rule, a)
     if #gs == 1 then
       local g = gs[1]
       if g.kind == "bool" then return true, nil, { { kind = "bool", v = g.v, invert = not g.invert } } end
-      if g.kind == "health" then
-        local curve = S.HealthCurve(not g.below, g.pct)
-        if curve then return true, nil, { { kind = "health", unit = g.unit, curve = curve, below = not g.below, pct = g.pct } } end
+      if g.kind == "pct" then
+        local mode = S.OPPOSITE[g.mode]
+        local curve = mode and S.StepCurve(mode, g.pct)
+        if curve then return true, nil, { { kind = "pct", what = g.what, unit = g.unit, mode = mode, pct = g.pct, curve = curve } } end
       end
     end
     return false, format("can't tell in combat whether rule %s is inactive: it hangs on several hidden values", label)
@@ -302,7 +312,7 @@ function Evaluate(rule)
     end
     if any then
       if gatedN == 1 then return true, nil, gated end
-      if gatedN > 1 then return false, "two hidden health checks in one \"any one\" group can't be decided in combat" end
+      if gatedN > 1 then return false, "two hidden health / mana checks in one \"any one\" group can't be decided" end
       return false, (#whys == 1) and whys[1] or ("none of: " .. table.concat(whys, "; or "))
     end
     return true, nil, mine
@@ -320,7 +330,7 @@ function Evaluate(rule)
         if #gatedSets == 1 then
           for _, x in ipairs(gatedSets[1]) do gates[#gates + 1] = x end
         elseif #gatedSets > 1 then
-          return false, "two OR groups with hidden health checks can't be decided in combat"
+          return false, "two OR groups with hidden health / mana checks can't be decided"
         else
           return false, (#whys == 1) and whys[1] or ("no group holds: " .. table.concat(whys, " / "))
         end
@@ -426,6 +436,9 @@ function G.Init()
   -- health rows (outside combat: read; in combat: the game re-applies the curve when we update)
   pcall(ev.RegisterUnitEvent, ev, "UNIT_HEALTH", "player", "target")
   pcall(ev.RegisterUnitEvent, ev, "UNIT_MAXHEALTH", "player", "target")
+  -- mana rows (your target's too)
+  pcall(ev.RegisterUnitEvent, ev, "UNIT_POWER_FREQUENT", "player", "target")
+  pcall(ev.RegisterUnitEvent, ev, "UNIT_MAXPOWER", "player", "target")
   ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4, a5)
     if event == "UNIT_COMBAT" then
       S.OnUnitCombat(a2, a3, a4, a5)

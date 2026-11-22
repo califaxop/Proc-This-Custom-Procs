@@ -214,15 +214,18 @@ end
 -- becomes a gate's alpha: 1 when the condition holds, 0 when not. Proc This! never sees it.
 ---------------------------------------------------------------------------
 local curves = {}
-function S.HealthCurve(below, pct)
-  if not (C_CurveUtil and C_CurveUtil.CreateCurve and UnitHealthPercent) then return nil end
-  local key = (below and "b" or "a") .. pct
+-- mode: "below" (< N), "above" (> N), and their exact opposites "atleast" (>= N), "atmost" (<= N)
+local CURVE = { below = { 1, 0, 0 }, atleast = { 0, 1, 0 }, above = { 0, 1, 0.00001 }, atmost = { 1, 0, 0.00001 } }
+S.OPPOSITE = { below = "atleast", atleast = "below", above = "atmost", atmost = "above" }
+function S.StepCurve(mode, pct)
+  if not (C_CurveUtil and C_CurveUtil.CreateCurve) then return nil end
+  local spec = CURVE[mode]
+  if not spec then return nil end
+  local key = mode .. pct
   if curves[key] ~= nil then return curves[key] or nil end
   local ok, curve = pcall(function()
     local c = C_CurveUtil.CreateCurve()
-    local at = pct / 100
-    local yes, no = 1, 0
-    local lo, hi = (below and yes or no), (below and no or yes) -- under the line / from the line up
+    local lo, hi, at = spec[1], spec[2], pct / 100 + spec[3] -- lo: under the line, hi: from it up
     if Enum.LuaCurveType and Enum.LuaCurveType.Step and c.SetType then
       c:SetType(Enum.LuaCurveType.Step)
       c:AddPoint(0, lo); c:AddPoint(at, hi)
@@ -233,6 +236,28 @@ function S.HealthCurve(below, pct)
   end)
   curves[key] = ok and curve or false
   return ok and curve or nil
+end
+-- (kept for callers of the earlier name)
+function S.HealthCurve(below, pct) return S.StepCurve(below and "below" or "atleast", pct) end
+
+-- does a readable percent meet the mode?
+function S.Meets(mode, v, pct)
+  if mode == "below" then return v < pct elseif mode == "above" then return v > pct
+  elseif mode == "atleast" then return v >= pct else return v <= pct end
+end
+
+-- a unit's mana in percent; nil, "hidden" when the game hides it (your own mana always is, on
+-- Forever); nil, "none" for no such unit; nil, "nomana" for a unit without mana
+function S.ManaPct(unit)
+  if not UnitExists(unit) then return nil, "none" end
+  local mana = (Enum and Enum.PowerType and Enum.PowerType.Mana) or 0
+  local okM, m = pcall(UnitPowerMax, unit, mana)
+  if okM and Readable(m) and type(m) == "number" and m <= 0 then return nil, "nomana" end
+  local okP, p = pcall(UnitPower, unit, mana)
+  if okP and okM and Readable(p) and Readable(m) and type(p) == "number" and type(m) == "number" and m > 0 then
+    return p / m * 100
+  end
+  return nil, "hidden"
 end
 
 -- a unit's health in percent, or nil when the game hides it (or there's no such unit)
