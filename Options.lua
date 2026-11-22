@@ -184,19 +184,14 @@ local function BuildEditor(p)
   local LOOK_KEYS = { "color", "startStyle", "motion", "scale", "alpha" }
   e.lookAll = UI.Button(p, "Use for all rules", 130, function()
     local r = Rule(); if not r then return end
-    local now = GetTime and GetTime() or 0
-    if e.allPending ~= r or now - (e.allAt or 0) > 5 then
-      e.allPending, e.allAt = r, now
-      ns.Print("click \"Use for all rules\" again to give every rule this look.")
-      return
-    end
-    e.allPending = nil
-    for _, x in ipairs(ns.db.rules) do
-      for _, k in ipairs(LOOK_KEYS) do x[k] = r[k] end
-      x.colorCustom = ns.Copy(r.colorCustom or { 1, 1, 1 })
-    end
-    ns.Print("every rule now has this look.")
-    ns.Glow.Restyle(); ui.Refresh()
+    UI.Confirm("ProcThisConfirm", format("Give all %d rules this look?\n|cffffd200%s|r's colour, start, pulse, size and intensity.",
+      #ns.db.rules, ns.RuleLabel(r)), function()
+      for _, x in ipairs(ns.db.rules) do
+        for _, k in ipairs(LOOK_KEYS) do x[k] = r[k] end
+        x.colorCustom = ns.Copy(r.colorCustom or { 1, 1, 1 })
+      end
+      ns.Glow.Restyle(); ui.Refresh()
+    end)
   end)
   e.lookAll.tip = "Give every rule this rule's look (colour, start, pulse, size, intensity)."
   e.lookAll:SetHeight(18) -- slim, to sit on the Look heading above its line

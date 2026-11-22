@@ -423,6 +423,23 @@ function UI.Scroll(parent, width, height)
 end
 
 -- A small window with a link, selected and ready to copy (addons can't open a browser).
+-- a small Yes / No box
+function UI.Confirm(name, text, onYes)
+  local win = _G[name]
+  if not win then
+    win = UI.Popup(name, 320, 110)
+    win.text = UI.Text(win, "line", "")
+    win.text:SetPoint("TOPLEFT", 20, -20); win.text:SetWidth(280)
+    local yes = UI.Button(win, "Yes", 90, function() win:Hide(); if win.yes then win.yes() end end)
+    yes:SetPoint("BOTTOMLEFT", 20, 18)
+    local no = UI.Button(win, "No", 90, function() win:Hide() end)
+    no:SetPoint("LEFT", yes, "RIGHT", 8, 0)
+  end
+  win.text:SetText(text)
+  win.yes = onYes
+  win:Place(); win:Show()
+end
+
 function UI.ShowLink(name, title, url)
   local win = _G[name]
   if not win then
