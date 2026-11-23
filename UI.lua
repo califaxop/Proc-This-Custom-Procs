@@ -40,8 +40,10 @@ end
 if type(EllesmereUI) == "table" and EllesmereUI.RegisterSkin then
   EllesmereUI.RegisterSkin("ProcThis", function(S)
     UI.euiSkin = S
-    if S.OnLooksChanged then S.OnLooksChanged(function() UI.Restyle() end) end
-    UI.Restyle()
+    -- (ns.OnLooksChanged: the addon's own frames that follow the style, beyond its windows)
+    local function again() UI.Restyle(); if ns.OnLooksChanged then pcall(ns.OnLooksChanged) end end
+    if S.OnLooksChanged then S.OnLooksChanged(again) end
+    again()
   end)
 end
 function UI.EUI()
@@ -112,14 +114,15 @@ function UI.BorderColor(th)
   return th.flare and th.accent or UI.BRONZE
 end
 
+local shelled = setmetatable({}, { __mode = "k" }) -- windows EllesmereUI has painted
 function UI.SkinWindow(f, alpha)
   local th = UI.Theme()
   if th.eui then
     -- EllesmereUI paints the shell itself (once; it keeps it in step with the player's theme)
-    if not f.PT_EUIShell then
+    if not shelled[f] then
       f:SetBackdrop(nil)
       local ok = pcall(UI.euiSkin.Shell, f)
-      f.PT_EUIShell = ok
+      shelled[f] = ok
       if not ok then f:SetBackdrop({ bgFile = W }); f:SetBackdropColor(0.06, 0.06, 0.06, alpha) end
     end
     return
