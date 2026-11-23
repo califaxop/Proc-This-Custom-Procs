@@ -26,7 +26,8 @@ function ns.Print(...) print("|cffffd200Proc This!:|r", ...) end
 ns.NEW_RULE = { enabled = true, spell = "", auras = {},
   melee = false, usable = true, ready = true, control = true, combat = false, proc = false,
   -- its look
-  color = "gold", colorCustom = { 1, 1, 1 }, startStyle = "shine", motion = "steady", scale = 1.4, alpha = 1 }
+  color = "gold", colorCustom = { 1, 1, 1 }, startStyle = "shine", motion = "steady", scale = 1.4, alpha = 1,
+  glowType = "blizzard" } -- (EllesmereUI mode: one of its glow styles, see ns.EUI_GLOWS)
 ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", mine = true,
   dur = 0, charges = 0, usedBy = "",
   group = 1 }  -- which group it's in (see ns.NormalizeGroups)
@@ -35,7 +36,8 @@ ns.DEFAULTS = {
   meleeWindow = 3,   -- seconds a melee hit on you counts as "being attacked in melee"
   -- (glowScale / glowStyle / glowAlpha: the old Look tab's one look for all rules; LoadDB copies
   -- them into each rule once, and nothing else reads them)
-  flareStyle = true,   -- settings window in FlareUI's style when FlareUI is installed
+  flareStyle = true,   -- FlareUI mode: settings window in FlareUI's style (when FlareUI is installed)
+  euiMode = true,      -- EllesmereUI mode: glows on its bars, shaped glows, its glow styles (when it's installed)
   rules = {
     -- the example asked for: Lightning Shield when it's not on you, you're being hit in melee,
     -- and you can cast it (not stunned, enough mana)
@@ -53,6 +55,28 @@ ns.GLOW_COLORS = {
   { "purple", "Purple", { 0.75, 0.35, 1 } }, { "pink", "Pink", { 1, 0.4, 0.8 } }, { "white", "White", { 1, 1, 1 } },
   { "custom", "Custom" },
 }
+-- Other UIs, found by themselves: each one's "mode" is on while it's installed (and the player hasn't
+-- turned it off in Settings).
+function ns.HasEllesmere() return type(EllesmereUI) == "table" and type(EllesmereUI.Glows) == "table" end
+function ns.EllesmereMode() return ns.HasEllesmere() and not (ns.db and ns.db.euiMode == false) end
+function ns.HasFlare() return ns.UI and ns.UI.FlareBorder and ns.UI.FlareBorder() ~= nil end
+-- EllesmereUI's glow styles (EllesmereUI.Glows.STYLES, matched by name): { key, label, its name }
+ns.EUI_GLOWS = {
+  { "blizzard", "Proc This! glow" },
+  { "pixel", "Pixel lines", "Pixel Glow" }, { "button", "Action Button", "Action Button Glow" },
+  { "autocast", "Autocast shine", "Auto-Cast Shine" }, { "gcd", "GCD ants", "GCD" },
+  { "modern", "Modern WoW", "Modern WoW Glow" }, { "classic", "Classic WoW", "Classic WoW Glow" },
+}
+-- a rule's EllesmereUI glow style: its index in EllesmereUI.Glows.STYLES, or nil (Proc This!'s own glow)
+function ns.EUIStyleIndex(rule)
+  if not ns.EllesmereMode() then return nil end
+  local key = rule and rule.glowType
+  local want
+  for _, g in ipairs(ns.EUI_GLOWS) do if g[1] == key then want = g[3] end end
+  if not want or type(EllesmereUI.Glows.STYLES) ~= "table" then return nil end
+  for i, s in ipairs(EllesmereUI.Glows.STYLES) do if s.name == want then return i end end
+end
+
 -- a colour key -> r, g, b, or nil for Blizzard gold
 function ns.GlowRGB(key, custom)
   if key == "custom" and type(custom) == "table" then return custom[1], custom[2], custom[3] end

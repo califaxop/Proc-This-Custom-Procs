@@ -174,6 +174,13 @@ local function BuildEditor(p)
   e.lSizeL = label("Size")
   e.size = UI.Toggle(p, 140, e.sizeOpts, lookField("scale"), function() ns.Glow.Restyle(); ui.Refresh() end,
     "How big the glow is around the button. Click to switch.")
+  -- EllesmereUI mode: its glow styles too
+  e.lGlowL = label("Glow")
+  e.glowType = UI.Toggle(p, 140, ns.EUI_GLOWS, { function() local r = Rule(); return r and r.glowType or "blizzard" end,
+    function(v) local r = Rule(); if r then r.glowType = v end end }, function() ns.Glow.Restyle(); ui.Refresh() end,
+    "EllesmereUI mode: Proc This!'s glow, or one of EllesmereUI's (pixel lines, autocast shine, GCD ants...). Click to switch. " ..
+    "On EllesmereUI's shaped buttons it's always its shape glow.")
+  e.lookParts[#e.lookParts + 1] = e.glowType
   e.lAlphaL = label("Intensity")
   e.alpha = UI.Toggle(p, 120, e.alphaOpts, lookField("alpha"), function() ns.Glow.Restyle(); ui.Refresh() end,
     "How strong the glow is. Click to switch.")
@@ -181,7 +188,7 @@ local function BuildEditor(p)
   e.lookTest = UI.Button(p, "Test glow", 90, function() ns.Glow.Test(3) end)
   e.lookParts[#e.lookParts + 1] = e.lookTest
   -- copy this rule's look to every rule (a second click within 5 seconds confirms)
-  local LOOK_KEYS = { "color", "startStyle", "motion", "scale", "alpha" }
+  local LOOK_KEYS = { "color", "startStyle", "motion", "scale", "alpha", "glowType" }
   e.lookAll = UI.Button(p, "Use for all rules", 130, function()
     local r = Rule(); if not r then return end
     UI.Confirm("ProcThisConfirm", format("Give all %d rules this look?\n|cffffd200%s|r's colour, start, pulse, size and intensity.",
@@ -197,7 +204,10 @@ local function BuildEditor(p)
   e.lookAll:SetHeight(18) -- slim, to sit on the Look heading above its line
   e.lookParts[#e.lookParts + 1] = e.lookAll
   e.RefreshLook = function()
-    for _, w in ipairs({ e.color, e.style, e.motion, e.size, e.alpha }) do w.Refresh() end
+    for _, w in ipairs({ e.color, e.style, e.motion, e.size, e.alpha, e.glowType }) do w.Refresh() end
+    -- an EllesmereUI glow style has no start animation or size of ours
+    local own = not (ns.EllesmereMode() and ns.EUIStyleIndex(Rule()))
+    e.style.SetActive(own); e.size.SetActive(own)
   end
 
   -- status
@@ -432,6 +442,9 @@ local function BuildEditor(p)
     pair(e.lStyleL, e.style, 0); pair(e.lMotionL, e.motion, 250)
     y = y - 28
     pair(e.lSizeL, e.size, 0); pair(e.lAlphaL, e.alpha, 250)
+    local eui = ns.EllesmereMode()
+    e.lGlowL:SetShown(eui and Rule() ~= nil); e.glowType:SetShown(eui and Rule() ~= nil)
+    if eui then y = y - 28; pair(e.lGlowL, e.glowType, 0) end
     y = y - 40
     place(e.secStatus, 0, 30)
     place(e.status, 0, 0)
@@ -604,9 +617,26 @@ local function PageSettings(pg)
     function(v) return v .. " s" end, Changed)):SetPoint("TOPLEFT", 0, -32)
   UI.Text(pg, "note", "Used by the \"Being attacked in melee\" condition."):SetPoint("TOPLEFT", 0, -72)
 
-  local sec4 = UI.Section(pg, "Window style", 330); sec4:SetPoint("TOPLEFT", 370, 0)
-  track(UI.Check(pg, "FlareUI style (needs FlareUI)", { function() return ns.db.flareStyle end,
-    function(v) ns.db.flareStyle = v end }, 300, function() UI.Restyle(); if ui then ui.Refresh() end end)):SetPoint("TOPLEFT", 370, -32)
+  -- other UIs: each mode turns itself on when that UI is installed
+  local sec4 = UI.Section(pg, "Other UIs", 330); sec4:SetPoint("TOPLEFT", 370, 0)
+  local function mode(label, has, key, onChange, tip, y)
+    local c = track(UI.Check(pg, label .. (has and "" or "  (not installed)"),
+      { function() return ns.db[key] ~= false end, function(v) ns.db[key] = v end }, 320, onChange))
+    c:SetPoint("TOPLEFT", 370, y)
+    local r0 = c.Refresh
+    c.Refresh = function() r0(); c.SetActive(has) end
+    c:HookScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(label, 1, 1, 1)
+      GameTooltip:AddLine(tip, 0.85, 0.85, 0.85, true)
+      if not has then GameTooltip:AddLine("Turns on by itself when it's installed.", 1, 0.82, 0, true) end
+      GameTooltip:Show()
+    end)
+    c:HookScript("OnLeave", function() GameTooltip:Hide() end)
+  end
+  mode("EllesmereUI mode", ns.HasEllesmere(), "euiMode", function() ns.Glow.Restyle(); if ui then ui.Refresh() end end,
+    "Glows on EllesmereUI's action bars, its shape glow on shaped buttons, and its glow styles (pixel lines, autocast shine, GCD ants...) in each rule's Look.", -32)
+  mode("FlareUI mode", ns.HasFlare(), "flareStyle", function() UI.Restyle(); if ui then ui.Refresh() end end,
+    "This window in FlareUI's style. (FlareUI restyles Blizzard's own bars, so glows already show there.)", -56)
 
   local note = UI.Text(pg, "note", "Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, in the Rules tab.")
   note:SetPoint("TOPLEFT", 0, -112); note:SetWidth(700)
@@ -694,6 +724,16 @@ ev:SetScript("OnEvent", function(_, event, arg1)
   elseif event == "PLAYER_LOGIN" then
     local ok, e = pcall(ns.Glow.Init)
     if not ok then ns.Print("start-up error: " .. tostring(e)) end
+    -- say once when another UI is found and its mode turned on
+    ns.db.seenUI = ns.db.seenUI or {}
+    if ns.EllesmereMode() and not ns.db.seenUI.eui then
+      ns.db.seenUI.eui = true
+      ns.Print("EllesmereUI found: EllesmereUI mode is on (glows on its bars, its glow styles in each rule's Look). /pt to change.")
+    end
+    if ns.HasFlare() and ns.db.flareStyle ~= false and not ns.db.seenUI.flare then
+      ns.db.seenUI.flare = true
+      ns.Print("FlareUI found: FlareUI mode is on. /pt to change.")
+    end
     -- Esc > Options > AddOns: a button that opens the window
     pcall(function()
       if Settings and Settings.RegisterCanvasLayoutCategory then

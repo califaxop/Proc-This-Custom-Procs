@@ -20,7 +20,7 @@ local EAB_BARS = { -- first slot -> its bar's settings key
   { 1, "MainBar" }, { 13, "Bar9" }, { 25, "Bar4" }, { 37, "Bar5" }, { 49, "Bar3" }, { 61, "Bar2" },
   { 109, "Bar10" }, { 145, "Bar6" }, { 157, "Bar7" }, { 169, "Bar8" },
 }
-local function HasEllesmere() return type(EllesmereUI) == "table" end
+local function HasEllesmere() return ns.EllesmereMode() end
 
 local buttons, builtAt
 local function Buttons()
@@ -45,7 +45,7 @@ end
 -- there Proc This! draws EllesmereUI's own shape glow (its public EllesmereUI.Glows), in the rule's
 -- colour. Returns the shape's mask and border textures, or nil (a square button: our usual glow).
 local function EllesmereShape(b)
-  if not (HasEllesmere() and EllesmereUI.Glows and EllesmereUI.Glows.StartShapeGlow and EllesmereUI.SHAPE_MASKS) then return nil end
+  if not (HasEllesmere() and EllesmereUI.Glows.StartShapeGlow and EllesmereUI.SHAPE_MASKS) then return nil end
   local slot = tonumber((b:GetName() or ""):match("^EABButton(%d+)$"))
   if not slot then return nil end
   local key
@@ -238,7 +238,8 @@ end
 local function StopShape(b)
   if b.SG_ShapeOn then
     local G2 = type(EllesmereUI) == "table" and EllesmereUI.Glows
-    if G2 and G2.StopShapeGlow then pcall(G2.StopShapeGlow, b.SG_ShapeWrap) end
+    local stop = G2 and (G2.StopAllGlows or G2.StopShapeGlow)
+    if stop then pcall(stop, b.SG_ShapeWrap) end
     b.SG_ShapeHost:Hide()
     b.SG_ShapeOn = nil
   end
@@ -311,9 +312,11 @@ local function Show(b, gates, rule)
   glow:SetAlpha(alpha)
   -- colour (and the shine's, so its flare matches)
   local r, gg, bb = ns.RuleGlowRGB(rule)
-  -- an EllesmereUI shaped button: its shape glow instead, inside the same gates
+  -- EllesmereUI mode: on its shaped buttons, its shape glow; elsewhere, the rule's EllesmereUI glow style
+  -- if it has one. Both drawn inside the same gates, so the conditions work the same.
   local mask, border = EllesmereShape(b)
-  if mask then
+  local euiIdx = (not mask) and ns.EUIStyleIndex(rule) or nil
+  if mask or euiIdx then
     if glow:IsShown() then glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop(); glow:Hide() end
     StopShine(b); StopBurst(b)
     if not b.SG_ShapeHost then
@@ -325,13 +328,20 @@ local function Show(b, gates, rule)
     end
     b.SG_Lead:SetAlpha(1)
     b.SG_ShapeHost:SetAlpha(alpha)
-    local key = table.concat({ mask, tostring(r), tostring(gg), tostring(bb), b:GetWidth() or 0 }, "|")
+    local w, h = b:GetSize()
+    local key = table.concat({ mask or "", euiIdx or 0, tostring(r), tostring(gg), tostring(bb), w or 0, h or 0 }, "|")
     if b.SG_ShapeOn ~= key then
-      local w, h = b:GetSize()
+      local E = EllesmereUI.Glows
+      if b.SG_ShapeOn and E.StopAllGlows then pcall(E.StopAllGlows, b.SG_ShapeWrap) end
       b.SG_ShapeHost:Show(); b.SG_ShapeWrap:Show()
-      local ok = pcall(EllesmereUI.Glows.StartShapeGlow, b.SG_ShapeWrap, math.min(w or 36, h or 36),
-        r or 1, gg or 0.79, bb or 0.14, 1.2, { maskPath = mask, borderPath = border, anchorFrame = b.SG_ShapeHost })
-      if ok then b.SG_ShapeOn = key else b.SG_ShapeHost:Hide() end
+      local ok
+      if mask then
+        ok = pcall(E.StartShapeGlow, b.SG_ShapeWrap, math.min(w or 36, h or 36),
+          r or 1, gg or 0.79, bb or 0.14, 1.2, { maskPath = mask, borderPath = border, anchorFrame = b.SG_ShapeHost })
+      else
+        ok = pcall(E.StartGlow, b.SG_ShapeWrap, euiIdx, w or 36, r or 1, gg or 0.79, bb or 0.14, nil, h or 36)
+      end
+      if ok then b.SG_ShapeOn = key else b.SG_ShapeHost:Hide(); b.SG_ShapeOn = nil end
     end
     if b.SG_ShapeOn then
       if motion == "pulse" then
@@ -357,6 +367,7 @@ end
 -- style or size changed: restart every glow so the change shows
 function G.Restyle()
   for _, b in ipairs(Buttons()) do Hide(b) end
+  buttons = nil -- (look again: EllesmereUI mode adds or drops its buttons)
   G.Update()
 end
 
