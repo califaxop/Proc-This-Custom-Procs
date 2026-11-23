@@ -5,7 +5,7 @@
 Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow on it the moment they're met. No more watching buff bars mid-fight.
 
 ## Highlights
-- **Any spell, any rank:** on Blizzard and FlareUI bars, macros included.
+- **Any spell, any rank:** on Blizzard, FlareUI and EllesmereUI bars, macros included. On EllesmereUI's shaped buttons (circle, hexagon...) the glow follows the shape.
 - **Buffs & debuffs:** on you or your target, active or missing, as many as you like.
 - **Groups with AND / OR:** e.g. *(Buff X or Buff Y) and (Debuff Z and Debuff W)*.
 - **Instant cast:** glow while a spell is instant (or isn't): Maelstrom Weapon at 5, Nature's Swiftness, Presence of Mind, Shadow Trance and more.
@@ -41,6 +41,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
+- **1.13.0:** Works with EllesmereUI's action bars: glows on all its bars, and on its shaped buttons (circle, hexagon, diamond...) it uses EllesmereUI's own shape glow in your rule's colour, so it fits the shape.
 - **1.12.0:** Health and mana conditions (you or your target below or above a %; in combat too), "Rule X is active / inactive" conditions, a look of its own for every rule (colour, start, pulse, size, intensity), and shorter commands: `/pt` or `/proc`.
 - **1.11.4:** Native look: the settings use the game's own tooltip border in bronze (without FlareUI style).
 - **1.11.3:** Lighter in combat: glow checks run at most 20 times a second (still instant to the eye), and nothing runs when you have no rules.
