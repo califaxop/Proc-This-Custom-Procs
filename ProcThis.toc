@@ -6,6 +6,7 @@
 ## Version: 1.13.0
 ## X-Curse-Project-ID: 1811746
 ## SavedVariables: ProcThisDB
+## OptionalDeps: EllesmereUI, FlareUI
 
 Core.lua
 State.lua

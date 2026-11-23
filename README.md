@@ -6,7 +6,7 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 
 ## Highlights
 - **Any spell, any rank:** on Blizzard, FlareUI and EllesmereUI bars, macros included.
-- **Fits your UI:** EllesmereUI or FlareUI found by themselves. With EllesmereUI, the glow follows its shaped buttons and you can pick its glow styles (autocast shine, pixel lines, GCD ants...).
+- **Fits your UI:** EllesmereUI or FlareUI found by themselves, and the settings window takes on their look. With EllesmereUI, the glow follows its shaped buttons and you can pick its glow styles (autocast shine, pixel lines, GCD ants...).
 - **Buffs & debuffs:** on you or your target, active or missing, as many as you like.
 - **Groups with AND / OR:** e.g. *(Buff X or Buff Y) and (Debuff Z and Debuff W)*.
 - **Instant cast:** glow while a spell is instant (or isn't): Maelstrom Weapon at 5, Nature's Swiftness, Presence of Mind, Shadow Trance and more.
@@ -42,7 +42,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
-- **1.13.0:** EllesmereUI and FlareUI modes, turned on by themselves when that UI is installed (Settings, Other UIs). EllesmereUI mode: glows on all its bars, its shape glow on shaped buttons (circle, hexagon, diamond...) in your rule's colour, and its glow styles in each rule's Look (pixel lines, Action Button, autocast shine, GCD ants, Modern and Classic WoW). FlareUI mode: the settings window in FlareUI's style.
+- **1.13.0:** EllesmereUI and FlareUI modes, turned on by themselves when that UI is installed (Settings, Other UIs). EllesmereUI mode: glows on all its bars, its shape glow on shaped buttons (circle, hexagon, diamond...) in your rule's colour, its glow styles in each rule's Look (pixel lines, Action Button, autocast shine, GCD ants, Modern and Classic WoW), and the settings window in EllesmereUI's style through its own skinning API (your theme, accent colour and font). FlareUI mode: the settings window in FlareUI's style.
 - **1.12.0:** Health and mana conditions (you or your target below or above a %; in combat too), "Rule X is active / inactive" conditions, a look of its own for every rule (colour, start, pulse, size, intensity), and shorter commands: `/pt` or `/proc`.
 - **1.11.4:** Native look: the settings use the game's own tooltip border in bronze (without FlareUI style).
 - **1.11.3:** Lighter in combat: glow checks run at most 20 times a second (still instant to the eye), and nothing runs when you have no rules.

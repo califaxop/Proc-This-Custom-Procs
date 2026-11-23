@@ -633,10 +633,10 @@ local function PageSettings(pg)
     end)
     c:HookScript("OnLeave", function() GameTooltip:Hide() end)
   end
-  mode("EllesmereUI mode", ns.HasEllesmere(), "euiMode", function() ns.Glow.Restyle(); if ui then ui.Refresh() end end,
-    "Glows on EllesmereUI's action bars, its shape glow on shaped buttons, and its glow styles (pixel lines, autocast shine, GCD ants...) in each rule's Look.", -32)
+  mode("EllesmereUI mode", ns.HasEllesmere(), "euiMode", function() ns.Glow.Restyle(); UI.Restyle(); if ui then ui.Refresh() end end,
+    "Glows on EllesmereUI's action bars, its shape glow on shaped buttons, its glow styles (pixel lines, autocast shine, GCD ants...) in each rule's Look, and this window in EllesmereUI's style (its theme, accent colour and font). Turning it off restyles the window after a /reload.", -32)
   mode("FlareUI mode", ns.HasFlare(), "flareStyle", function() UI.Restyle(); if ui then ui.Refresh() end end,
-    "This window in FlareUI's style. (FlareUI restyles Blizzard's own bars, so glows already show there.)", -56)
+    "This window in FlareUI's style (when EllesmereUI mode isn't styling it). FlareUI restyles Blizzard's own bars, so glows already show there.", -56)
 
   local note = UI.Text(pg, "note", "Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, in the Rules tab.")
   note:SetPoint("TOPLEFT", 0, -112); note:SetWidth(700)
