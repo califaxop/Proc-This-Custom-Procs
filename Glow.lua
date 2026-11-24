@@ -59,7 +59,7 @@ local function EllesmereShape(b)
   return mask, EllesmereUI.SHAPE_BORDERS and EllesmereUI.SHAPE_BORDERS[shape]
 end
 
--- The spell name on a button (spells and macros that cast a spell).
+-- The spell (or item) name on a button: spells, items, and macros that cast a spell or use an item.
 local slotCache = {}
 local function ButtonSpell(b)
   local action = b.action or (b.CalculateAction and b:CalculateAction()) or (b.GetAttribute and b:GetAttribute("action"))
@@ -71,6 +71,9 @@ local function ButtonSpell(b)
   local name
   if kind == "spell" then
     name = ns.SpellName(id)
+  elseif kind == "item" then
+    name = ns.ItemName(id)
+    if not name then return nil end -- (not loaded yet: ask again next time)
   elseif kind == "macro" then
     -- newer clients hand back the spell the macro casts (subType "spell"); older ones the
     -- macro's index, to ask which spell it casts
@@ -78,6 +81,11 @@ local function ButtonSpell(b)
     if not name and GetMacroSpell then
       local ok, sid = pcall(GetMacroSpell, id)
       if ok and not isSecret(sid) then name = ns.SpellName(sid) end
+    end
+    if not name and subType == "item" then name = ns.ItemName(id) end
+    if not name and GetMacroItem then -- (a macro that uses an item: /use Healing Potion)
+      local ok, iname = pcall(GetMacroItem, id)
+      if ok and not isSecret(iname) and type(iname) == "string" then name = iname end
     end
     return name -- not cached: a macro with [conditions] can switch spells at any moment
   end
@@ -531,11 +539,12 @@ function Evaluate(rule)
     end
   end
   if rule.proc and not S.Flagged(name) then return false, "not flagged as a proc" end
-  if rule.ready and not S.Ready(name) then return false, "on cooldown" end
+  local item = ns.RuleItem(rule)
+  if rule.ready and not S.Ready(name, item) then return false, "on cooldown" end
   if rule.usable then
-    local u = S.Usable(name)
+    local u = S.Usable(name, item)
     if isSecret(u) then gates[#gates + 1] = { kind = "bool", v = u }
-    elseif not u then return false, "not castable (mana / not known)" end
+    elseif not u then return false, item and "not usable (none in your bags, or can't use it now)" or "not castable (mana / not known)" end
   end
   if #gates > MAX_GATES then return false, "too many hidden conditions at once" end
   if #gates > 0 then return true, "decided by the game (hidden values)", gates end

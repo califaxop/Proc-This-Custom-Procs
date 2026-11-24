@@ -303,7 +303,8 @@ function UI.Toggle(parent, width, options, opt, onChange, tip)
   return b
 end
 
--- text box; commit(text) on Enter or leaving it; Esc reverts. spells = accept spells dragged in.
+-- text box; commit(text) on Enter or leaving it; Esc reverts. spells = accept spells dragged in
+-- ("items": items from your bags too).
 function UI.Edit(parent, width, opt, placeholder, spells, numeric)
   local get, set = opt[1], opt[2]
   local e = CreateFrame("EditBox", nil, parent, "BackdropTemplate")
@@ -332,8 +333,9 @@ function UI.Edit(parent, width, opt, placeholder, spells, numeric)
   e:SetScript("OnTextChanged", showPh)
   if spells then
     local function drop(self)
-      local kind, _, b2, spellID = GetCursorInfo()
+      local kind, b1, b2, spellID = GetCursorInfo()
       local n = (kind == "spell") and ns.SpellName(spellID or b2)
+        or (spells == "items" and kind == "item" and ns.ItemName(b1)) -- (an item from your bags)
       if n then ClearCursor(); self:SetText(n); set(n); self:ClearFocus(); e.Refresh() end
     end
     e:SetScript("OnReceiveDrag", drop)

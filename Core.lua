@@ -262,16 +262,65 @@ function ns.SpellIcon(spell)
     if C_Spell and C_Spell.GetSpellTexture then return C_Spell.GetSpellTexture(spell) end
     return GetSpellTexture and GetSpellTexture(spell)
   end)
-  return ok and tex or nil
+  if ok and tex then return tex end
+  -- an item's icon
+  local id = ns.ItemID(spell)
+  local okI, itex = pcall(function()
+    if C_Item and C_Item.GetItemIconByID then return C_Item.GetItemIconByID(id) end
+    return GetItemIcon and GetItemIcon(id)
+  end)
+  return id and okI and itex or nil
 end
 
--- A rule's spell as typed: a name, or a spell ID -> its name.
+---------------------------------------------------------------------------
+-- Items: a rule can glow an item on your bars (a trinket, a potion...), matched by its name
+---------------------------------------------------------------------------
+function ns.ItemName(id)
+  if not id or ns.isSecret(id) then return nil end
+  local ok, n = pcall(function()
+    if C_Item and C_Item.GetItemNameByID then return C_Item.GetItemNameByID(id) end
+    return GetItemInfo and (GetItemInfo(id))
+  end)
+  return ok and n or nil
+end
+-- an item's ID from its name, link or ID (nil: not an item the game knows yet)
+function ns.ItemID(x)
+  if not x or x == "" or ns.isSecret(x) then return nil end
+  local fromLink = type(x) == "string" and tonumber(x:match("item:(%d+)"))
+  if fromLink then return fromLink end
+  local ok, id = pcall(function()
+    if C_Item and C_Item.GetItemInfoInstant then return (C_Item.GetItemInfoInstant(x)) end
+    return GetItemInfoInstant and (GetItemInfoInstant(x))
+  end)
+  return ok and tonumber(id) or nil
+end
+local function IsSpellName(s)
+  if not (C_Spell and C_Spell.GetSpellInfo) then return GetSpellInfo and GetSpellInfo(s) ~= nil end
+  local ok, info = pcall(C_Spell.GetSpellInfo, s)
+  return ok and info ~= nil
+end
+
+-- A rule's spell (or item) as typed: a name, a spell ID, an item link or "item:ID" -> its name.
 function ns.RuleSpellName(rule)
   local s = rule.spell
   if not s or s == "" then return nil end
+  local itemID = s:match("item:(%d+)")
+  if itemID then return ns.ItemName(tonumber(itemID)) end
   local id = tonumber(s)
-  if id then return ns.SpellName(id) end
+  if id then return ns.SpellName(id) or ns.ItemName(id) end
   return s
+end
+
+-- the rule's item ID if it glows an item, not a spell (nil: a spell)
+function ns.RuleItem(rule)
+  local s = rule.spell
+  if not s or s == "" then return nil end
+  local linked = tonumber(s:match("item:(%d+)"))
+  if linked then return linked end
+  local id = tonumber(s)
+  if id then return (not ns.SpellName(id)) and ns.ItemName(id) and id or nil end
+  if IsSpellName(s) then return nil end
+  return ns.ItemID(s)
 end
 
 -- an aura condition's aura name (name or ID; blank = the rule's spell)

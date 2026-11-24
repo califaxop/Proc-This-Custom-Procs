@@ -306,8 +306,17 @@ end
 ---------------------------------------------------------------------------
 -- Spells
 ---------------------------------------------------------------------------
--- Castable (known, enough mana). Returns true/false, or the game's hidden value untouched.
-function S.Usable(name)
+-- Castable (known, enough mana); for an item, usable (you have it and can use it now). Returns
+-- true/false, or the game's hidden value untouched.
+function S.Usable(name, item)
+  if item then
+    local fn = (C_Item and C_Item.IsUsableItem) or IsUsableItem
+    if not fn then return true end
+    local ok, usable = pcall(fn, item)
+    if not ok then return false end
+    if isSecret(usable) then return usable end
+    return usable and true or false
+  end
   if not (C_Spell and C_Spell.IsSpellUsable) then
     if IsUsableSpell then return (IsUsableSpell(name)) and true or false end
     return true
@@ -318,8 +327,16 @@ function S.Usable(name)
   return usable and true or false
 end
 
--- Off cooldown. The global cooldown doesn't count (both flags stay readable).
-function S.Ready(name)
+-- Off cooldown. The global cooldown doesn't count (both flags stay readable). For an item, its own
+-- cooldown (a cooldown of 1.5 s or less is the global one).
+function S.Ready(name, item)
+  if item then
+    local fn = (C_Container and C_Container.GetItemCooldown) or GetItemCooldown
+    if not fn then return true end
+    local ok, start, duration = pcall(fn, item)
+    if not (ok and Readable(start) and Readable(duration)) then return true end
+    return not (start and start > 0 and duration and duration > 1.5)
+  end
   if not (C_Spell and C_Spell.GetSpellCooldown) then return true end
   local ok, info = pcall(C_Spell.GetSpellCooldown, name)
   if not (ok and type(info) == "table") then return true end

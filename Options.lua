@@ -113,11 +113,11 @@ local function BuildEditor(p)
 
 
   -- spell
-  e.secSpell = UI.Section(p, "Spell to glow", EW)
+  e.secSpell = UI.Section(p, "Spell or item to glow", EW)
   e.spell = UI.Edit(p, 230, { function() local r = Rule(); return r and r.spell end,
     function(v) local r = Rule(); if r then r.spell = v; ui.Refresh(); Changed() end end },
-    "Name or ID", true)
-  e.spellNote = UI.Text(p, "note", "Every rank glows. Type it, or drag it from your spellbook.")
+    "Name or ID", "items")
+  e.spellNote = UI.Text(p, "note", "Every rank glows. Type it, or drag it from your spellbook or bags (trinkets, potions...).")
   e.spellNote:SetWidth(EW - 244)
 
   -- aura conditions, in groups
@@ -484,7 +484,7 @@ local function BuildEditor(p)
     local r = Rule()
     if not r then return end
     local name = ns.RuleSpellName(r)
-    if not name then e.status:SetText("|cffff6060Type a spell name or ID.|r"); return end
+    if not name then e.status:SetText("|cffff6060Type a spell or item: name or ID.|r"); return end
     local lines = {}
     local on, why, gates = ns.Glow.Evaluate(r)
     if on and gates and #gates > 0 then lines[#lines + 1] = "|cffffd200Glowing when the game says so (hidden values)|r"
@@ -653,6 +653,7 @@ local function PageHelp(pg)
     y = y - (fs:GetStringHeight() or 14) - 8
   end
   sec("How rules work")
+  para("Items work too: put a trinket, potion or any usable item in the spell box (type its name or ID, or drag it from your bags) and it glows on your action bars, as itself or in a macro that /use-s it. For an item, \"Off cooldown\" is the item's own cooldown and \"Castable\" means you have it and can use it now.", "note")
   para("A rule glows a spell on your action bars while ALL of its conditions hold. Add as many buffs and debuffs as you like: " ..
     "each one says who has it (you or your target), whether it's a buff or a debuff, and whether it must be active or missing.")
   para("Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, " ..
