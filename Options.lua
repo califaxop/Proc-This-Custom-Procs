@@ -95,6 +95,7 @@ local UNITS = { { "player", "On me" }, { "target", "On target" } }
 local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant" }, { "health", "Health" }, { "mana", "Mana" }, { "rule", "Rule" } }
 local HPMODES = { { "below", "Below" }, { "above", "Above" } }
 local IMODES = { { "present", "Is" }, { "missing", "Isn't" } }
+local RMODES = { { "present", "Active" }, { "missing", "Inactive" } } -- (a Rule row: [Rule] [which rule] [Active / Inactive])
 local MODES = { { "present", "Active" }, { "missing", "Missing" } }
 
 local function BuildEditor(p)
@@ -228,11 +229,9 @@ local function BuildEditor(p)
     -- for Instant rows, in place of On me / On target: is or isn't instant
     row.imode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh, "Glow while the spell is instant cast, or while it isn't. Click to switch.")
     row.imode:SetPoint("TOPLEFT", 0, 0)
-    -- for Rule rows: the same Is / Isn't, with its own explanation
-    row.rmode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh,
-      "Glow while the rule you pick is active (its conditions are met right now), or while it isn't. Click to switch.")
-    row.rmode:SetPoint("TOPLEFT", 0, 0)
-    row.kind:SetPoint("LEFT", row.unit, "RIGHT", 4, 0)
+    -- for Rule rows, after the rule: Active / Inactive
+    row.rmode = UI.Toggle(row, 70, RMODES, Field(A, "mode"), refresh,
+      "Glow while the rule you pick is active (its conditions are met right now), or while it's inactive. Click to switch.")
     row.mode = UI.Toggle(row, 62, MODES, Field(A, "mode"), refresh, "Glow while it's active, or while it's missing. Click to switch.")
     row.mode:SetPoint("LEFT", row.kind, "RIGHT", 4, 0)
     -- for Health rows, in place of Active / Missing and the name: below / at least N %
@@ -246,14 +245,13 @@ local function BuildEditor(p)
     row.pct:SetPoint("LEFT", row.hpMode, "RIGHT", 6, 0)
     row.pctSign = UI.Text(row, "line", "% health")
     row.pctSign:SetPoint("LEFT", row.pct, "RIGHT", 4, 0)
-    -- for Rule rows: which other rule (the Is / Isn't switch says active or not)
+    -- for Rule rows: which other rule (then Active / Inactive)
     row.ruleOpts = {}
     row.ruleSel = UI.Toggle(row, 200, row.ruleOpts, { function() local a = A(); return a and a.rule end,
       function(v) local a = A(); if a then a.rule = v end end }, refresh,
       "Which rule: click to step through your rules. It's active while its own conditions are met (whether or not its spell is on your bars).")
     row.ruleSel:SetPoint("LEFT", row.kind, "RIGHT", 4, 0)
-    row.ruleWord = UI.Text(row, "line", "active")
-    row.ruleWord:SetPoint("LEFT", row.ruleSel, "RIGHT", 6, 0)
+    row.rmode:SetPoint("LEFT", row.ruleSel, "RIGHT", 4, 0)
     row.name = UI.Edit(row, 116, { function() local a = A(); return a and a.name end,
       function(v) local a = A(); if a then a.name = v; refresh() end end }, "the spell itself", true)
     row.name:SetPoint("LEFT", row.mode, "RIGHT", 6, 0)
@@ -318,10 +316,13 @@ local function BuildEditor(p)
       row.unit:SetShown(not instant and not isRule); row.mode:SetShown(not instant and not health and not isRule)
       row.imode:SetShown(instant); row.rmode:SetShown(isRule)
       row.hpMode:SetShown(health); row.pct:SetShown(health); row.pctSign:SetShown(health)
-      row.ruleSel:SetShown(isRule); row.ruleWord:SetShown(isRule)
+      row.ruleSel:SetShown(isRule)
+      -- the kind leads a Rule row ([Rule] [which rule] [Active / Inactive]); else it follows On me / On target
+      row.kind:ClearAllPoints()
+      if isRule then row.kind:SetPoint("TOPLEFT", 0, 0) else row.kind:SetPoint("LEFT", row.unit, "RIGHT", 4, 0) end
       row.name:SetShown(not health and not isRule)
       row.dot:ClearAllPoints()
-      row.dot:SetPoint("LEFT", (health and row.pctSign) or (isRule and row.ruleWord) or row.name, "RIGHT", 10, 0)
+      row.dot:SetPoint("LEFT", (health and row.pctSign) or (isRule and row.rmode) or row.name, "RIGHT", 10, 0)
       row.dot:SetShown(not instant and not health and not isRule) -- these need no Cooldown Manager
       local tdebuff = a.unit == "target" and a.kind == "debuff"
       for _, w in ipairs(row.extra) do w:SetShown(tdebuff) end
