@@ -214,7 +214,7 @@ local function BuildEditor(p)
   end
 
   -- status
-  e.secStatus = UI.Section(p, "Right now", EW)
+  e.secStatus = UI.Section(p, "Current Rule Status", EW)
   e.status = UI.Text(p, "line", "")
   e.status:SetWidth(EW); e.status:SetSpacing(3)
 
