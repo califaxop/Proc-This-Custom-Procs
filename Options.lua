@@ -95,7 +95,7 @@ local UNITS = { { "player", "Self" }, { "target", "Target" } }
 local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant" }, { "health", "Health" }, { "mana", "Mana" }, { "rule", "Rule" } }
 local HPMODES = { { "below", "Below" }, { "above", "Above" } }
 -- every condition reads [Kind] [Who] [What] [State]: [Debuff] [Target] [Stormstrike] [Active],
--- [Rule] [Lightning Bolt] [Inactive], [Instant] [Lightning Bolt] [Active], [Health] [Self] [40] % [Below]
+-- [Rule] [Lightning Bolt] [Inactive], [Instant] [Lightning Bolt] [Active], [Health] [Self] [Below] [40] %
 local IMODES = { { "present", "Active" }, { "missing", "Inactive" } }
 local RMODES = IMODES
 local MODES = IMODES
@@ -233,7 +233,7 @@ local function BuildEditor(p)
     row.rmode = UI.Toggle(row, 70, RMODES, Field(A, "mode"), refresh,
       "Glow while the rule you pick is active (its conditions are met right now), or while it's inactive. Click to switch.")
     row.mode = UI.Toggle(row, 70, MODES, Field(A, "mode"), refresh, "Active: glow while it's on. Inactive: while it's missing. Click to switch.")
-    -- for Health and Mana rows, after the %: below or above it
+    -- for Health and Mana rows: below or above, then the %
     row.hpMode = UI.Toggle(row, 62, HPMODES, { function() local a = A(); return a and a.hpMode or "below" end,
       function(v) local a = A(); if a then a.hpMode = v end end }, refresh,
       "Glow while it's below the %, or above it. Click to switch.")
@@ -317,7 +317,7 @@ local function BuildEditor(p)
       local chain
       if isRule then chain = { row.kind, row.ruleSel, row.rmode }
       elseif instant then chain = { row.kind, row.name, row.imode }
-      elseif health then chain = { row.kind, row.unit, row.pct, row.pctSign, row.hpMode }
+      elseif health then chain = { row.kind, row.unit, row.hpMode, row.pct, row.pctSign }
       else chain = { row.kind, row.unit, row.name, row.mode } end
       for j, w in ipairs(chain) do
         w:ClearAllPoints()
