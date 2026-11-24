@@ -92,10 +92,10 @@ local CHECKS = {
   { "proc",    "The game flags it as a proc" },
 }
 local UNITS = { { "player", "Self" }, { "target", "Target" } }
-local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant" }, { "health", "Health" }, { "mana", "Mana" }, { "rule", "Rule" } }
+local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant Cast" }, { "health", "Health" }, { "mana", "Mana" }, { "rule", "Rule" } }
 local HPMODES = { { "below", "Below" }, { "above", "Above" } }
 -- every condition reads [Kind] [Who] [What] [State]: [Debuff] [Target] [Stormstrike] [Active],
--- [Rule] [Lightning Bolt] [Inactive], [Instant] [Lightning Bolt] [Active], [Health] [Self] [Below] [40] %
+-- [Rule] [Lightning Bolt] [Inactive], [Instant Cast] [Lightning Bolt] [Active], [Health] [Self] [Below] [40] %
 local IMODES = { { "present", "Active" }, { "missing", "Inactive" } }
 local RMODES = IMODES
 local MODES = IMODES
@@ -225,8 +225,8 @@ local function BuildEditor(p)
     local function A() local r = Rule(); return r and r.auras[i] end
     local function refresh() ui.Refresh(); Changed() end
     row.unit = UI.Toggle(row, 62, UNITS, Field(A, "unit"), refresh, "On you (Self) or on your target. Click to switch.")
-    row.kind = UI.Toggle(row, 56, KINDS, Field(A, "kind"), refresh,
-      "A buff, a debuff, Instant (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health or Mana (yours or your target's, below or above a %), or Rule (another of your rules is active, or isn't). Click to switch.")
+    row.kind = UI.Toggle(row, 86, KINDS, Field(A, "kind"), refresh,
+      "A buff, a debuff, Instant Cast (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health or Mana (yours or your target's, below or above a %), or Rule (another of your rules is active, or isn't). Click to switch.")
     -- for Instant rows, after the spell: instant now (Active) or not (Inactive)
     row.imode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh, "Active: glow while the spell is instant cast. Inactive: while it isn't. Click to switch.")
     -- for Rule rows, after the rule: Active / Inactive
@@ -670,7 +670,7 @@ local function PageHelp(pg)
     "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
   para("Rule rows: another of your rules is active (its conditions are met right now) or isn't. Example: Earth Shock glows while your Flame Shock rule is inactive. A rule can't depend on itself, and rules that depend on each other in a loop never glow.", "note")
   para("Health and Mana rows: yours or your target's, below or above a %. Example: Healing Wave glows while your target is below 40% health; Evocation while your mana is below 20%. When the game hides the value (health in combat, your mana always), the game itself checks it against your % and switches the glow: Proc This! never sees the number. A dead target, or one without mana, never counts.", "note")
-  para("Instant rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt cast <spell> shows a spell's cast time.", "note")
+  para("Instant Cast rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt cast <spell> shows a spell's cast time.", "note")
   para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
     "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /pt cast <spell>  its cast time now")
   sec("Feedback")
