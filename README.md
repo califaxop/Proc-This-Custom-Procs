@@ -42,7 +42,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
-- **1.13.1:** Rule conditions read like the others: [Rule] [which rule] [Active / Inactive].
+- **1.13.1:** Every condition reads the same way, left to right: [Kind] [Who] [What] [State], e.g. [Debuff] [Target] [Stormstrike] [Active], [Rule] [Lightning Bolt] [Inactive], [Instant] [Lightning Bolt] [Active], [Health] [Self] [40] % [Below]. Missing is now called Inactive; On me / On target are Self / Target.
 - **1.13.0:** EllesmereUI and FlareUI modes, turned on by themselves when that UI is installed (Settings, Other UIs). EllesmereUI mode: glows on all its bars, its shape glow on shaped buttons (circle, hexagon, diamond...) in your rule's colour, its glow styles in each rule's Look (pixel lines, Action Button, autocast shine, GCD ants, Modern and Classic WoW), and the settings window in EllesmereUI's style through its own skinning API (your theme, accent colour and font). FlareUI mode: the settings window in FlareUI's style.
 - **1.12.0:** Health and mana conditions (you or your target below or above a %; in combat too), "Rule X is active / inactive" conditions, a look of its own for every rule (colour, start, pulse, size, intensity), and shorter commands: `/pt` or `/proc`.
 - **1.11.4:** Native look: the settings use the game's own tooltip border in bronze (without FlareUI style).
