@@ -21,7 +21,8 @@ function ns.Print(...) print("|cffffd200Proc This!:|r", ...) end
 --   control     you have control (not stunned, feared, charmed...)
 --   combat      only while you're in combat
 --   proc        the game flags the spell as a proc
---   (an aura row can also be kind = "health": unit, hpMode "below" | "above", pct;
+--   (an aura row can also be kind = "health" / "mana": unit, op, pct; "combo" / "rage" / "energy":
+--    op, pct (an amount); op is "gt" (>), "ge" (>=), "lt" (<), "le" (<=) or "eq" (=);
 --    or kind = "rule": rule = another rule's id, mode "present" = it's active, "missing" = it isn't)
 ns.NEW_RULE = { enabled = true, spell = "", auras = {},
   melee = false, usable = true, ready = true, control = true, combat = false, proc = false,
@@ -38,13 +39,14 @@ ns.DEFAULTS = {
   -- them into each rule once, and nothing else reads them)
   flareStyle = true,   -- FlareUI mode: settings window in FlareUI's style (when FlareUI is installed)
   euiMode = true,      -- EllesmereUI mode: glows on its bars, shaped glows, its glow styles (when it's installed)
-  rules = {
-    -- the example asked for: Lightning Shield when it's not on you, you're being hit in melee,
-    -- and you can cast it (not stunned, enough mana)
-    { enabled = true, spell = "Lightning Shield",
-      auras = { { name = "", unit = "player", kind = "buff", mode = "missing", mine = true, dur = 0, charges = 0, usedBy = "" } },
-      melee = true, usable = true, ready = true, control = true, combat = false, proc = false },
-  },
+  chars = {},          -- each character's rules: chars["Name-Realm"] = { rules = {...}, class = "SHAMAN" }
+}
+-- A new character's first rules, on a fresh install (kept only if it knows the spell): the example
+-- asked for, Lightning Shield when it's not on you, you're being hit in melee, and you can cast it
+ns.EXAMPLE_RULES = {
+  { enabled = true, spell = "Lightning Shield",
+    auras = { { name = "", unit = "player", kind = "buff", mode = "missing", mine = true, dur = 0, charges = 0, usedBy = "" } },
+    melee = true, usable = true, ready = true, control = true, combat = false, proc = false },
 }
 
 -- Glow colours. "gold" is Blizzard's own art, untouched; the rest tint a grey copy of it.
@@ -135,7 +137,7 @@ function ns.NewRuleId()
 end
 function ns.EnsureRuleIds()
   local seen = {}
-  for _, r in ipairs(ProcThisDB.rules or {}) do
+  for _, r in ipairs(ns.db and ns.db.rules or {}) do
     if r.id == nil or seen[r.id] then r.id = ns.NewRuleId() end
     seen[r.id] = true
     if r.id > (ProcThisDB.nextRuleId or 0) then ProcThisDB.nextRuleId = r.id end
@@ -155,13 +157,9 @@ function ns.RuleLabel(r)
   return n > 1 and format("%s (#%d)", name, idx or 0) or name
 end
 
-function ns.LoadDB()
-  ProcThisDB = ProcThisDB or {}
-  for k, v in pairs(ns.DEFAULTS) do
-    if ProcThisDB[k] == nil then ProcThisDB[k] = Copy(v) end
-  end
-  -- rules saved by an older version: their separate buff / debuff fields become aura conditions
-  for _, r in ipairs(ProcThisDB.rules) do
+-- rules saved by an older version: brought up to date
+local function MigrateRules(list)
+  for _, r in ipairs(list or {}) do
     if r.auras == nil then
       local au = {}
       local function add(t)
@@ -242,10 +240,147 @@ function ns.LoadDB()
     ns.NormalizeGroups(r)
     for _, c in ipairs(r.auras) do
       for k, v in pairs(ns.NEW_AURA) do if c[k] == nil then c[k] = v end end
+      -- number rows: "Below" / "Above" / "At least" / "At most" become <, >, >=, <=
+      if c.op == nil and (c.hpMode ~= nil or c.cpMode ~= nil) then
+        if c.kind == "combo" then c.op = (c.cpMode == "atmost") and "le" or "ge"
+        else c.op = (c.hpMode == "above") and "gt" or "lt" end
+      end
+      c.hpMode, c.cpMode = nil, nil
     end
   end
-  ns.db = ProcThisDB
+end
+
+---------------------------------------------------------------------------
+-- Rules belong to each character (ProcThisDB.chars["Name-Realm"].rules); settings are shared.
+-- ns.db reads and writes ProcThisDB, except ns.db.rules: this character's list.
+---------------------------------------------------------------------------
+function ns.CharKey()
+  local name = UnitName and UnitName("player") or "?"
+  local realm = GetRealmName and GetRealmName() or ""
+  return format("%s-%s", tostring(name), tostring(realm))
+end
+
+function ns.LoadDB()
+  ProcThisDB = ProcThisDB or {}
+  for k, v in pairs(ns.DEFAULTS) do
+    if ProcThisDB[k] == nil then ProcThisDB[k] = Copy(v) end
+  end
+  -- before 1.15.0 every character shared one list: kept, for each character's first login
+  if ProcThisDB.rules ~= nil then
+    if ProcThisDB.sharedRules == nil then ProcThisDB.sharedRules = ProcThisDB.rules end
+    ProcThisDB.rules = nil
+  end
+  MigrateRules(ProcThisDB.sharedRules)
+  for _, c in pairs(ProcThisDB.chars) do
+    if type(c) == "table" then c.rules = c.rules or {}; MigrateRules(c.rules) end
+  end
+  local key = ns.CharKey()
+  local me = ProcThisDB.chars[key]
+  if type(me) ~= "table" then me = { rules = {}, fresh = true }; ProcThisDB.chars[key] = me end
+  me.class = UnitClass and select(2, UnitClass("player")) or me.class
+  me.name = UnitName and UnitName("player") or me.name
+  ns.char = me
+  ns.db = setmetatable({}, {
+    __index = function(_, k) if k == "rules" then return ns.char.rules end return ProcThisDB[k] end,
+    __newindex = function(_, k, v) if k == "rules" then ns.char.rules = v else ProcThisDB[k] = v end end,
+  })
   ns.EnsureRuleIds()
+end
+
+-- Is this spell in your spellbook?
+function ns.SpellKnown(name)
+  if not name or name == "" then return false end
+  if C_SpellBook and C_SpellBook.FindSpellBookSlotForSpell then
+    local ok, slot = pcall(C_SpellBook.FindSpellBookSlotForSpell, name)
+    if ok and slot then return true end
+  end
+  local id
+  if C_Spell and C_Spell.GetSpellInfo then
+    local ok, info = pcall(C_Spell.GetSpellInfo, name)
+    id = ok and type(info) == "table" and info.spellID or nil
+  end
+  if not id or ns.isSecret(id) then return false end
+  if IsPlayerSpell then local ok, k = pcall(IsPlayerSpell, id); if ok and k == true then return true end end
+  if IsSpellKnown then local ok, k = pcall(IsSpellKnown, id); if ok and k == true then return true end end
+  return false
+end
+
+-- Would this character use this rule? Its spell is in your spellbook, or its item is in your bags
+-- or on you.
+function ns.RuleFits(r)
+  local item = ns.RuleItem(r)
+  if item then
+    local n = 0
+    if C_Item and C_Item.GetItemCount then local ok, c = pcall(C_Item.GetItemCount, item, true); n = ok and tonumber(c) or 0
+    elseif GetItemCount then n = GetItemCount(item, true) or 0 end
+    if n > 0 then return true end
+    return IsEquippedItem and IsEquippedItem(item) and true or false
+  end
+  return ns.SpellKnown(ns.RuleSpellName(r))
+end
+
+-- Copies of rules (from another character, or the old shared list) added to this character's,
+-- each with a new id; "Rule X" rows point at the copies. keep(r): which to take (nil: all).
+-- Returns how many were added.
+function ns.AddRuleCopies(src, keep)
+  if ns.char and keep == nil then ns.char.fresh = nil end -- (you chose this character's rules yourself)
+  local map, added = {}, {}
+  for _, r in ipairs(src or {}) do
+    if not keep or keep(r) then
+      local c = Copy(r); c.id = ns.NewRuleId()
+      if r.id then map[r.id] = c.id end
+      added[#added + 1] = c
+    end
+  end
+  for _, c in ipairs(added) do
+    for _, a in ipairs(c.auras or {}) do
+      if a.kind == "rule" then a.rule = map[a.rule] end -- (a rule that wasn't copied: pick another)
+    end
+    table.insert(ns.db.rules, c)
+  end
+  return #added
+end
+
+-- A character's first login: the rules it would use, from the old shared list (or the example).
+-- The spellbook can still be loading at login: when nothing fits, it waits for it (final = last try).
+function ns.SetUpCharacter(final)
+  local me = ns.char
+  if not (me and me.fresh) then return end
+  local src = ProcThisDB.sharedRules or ns.EXAMPLE_RULES
+  local fits = 0
+  for _, r in ipairs(src) do if ns.RuleFits(r) then fits = fits + 1 end end
+  if fits == 0 and not final then return end
+  ns.AddRuleCopies(src, ns.RuleFits)
+  me.fresh = nil
+  if ProcThisDB.sharedRules and #ProcThisDB.sharedRules > 0 then
+    if fits > 0 then
+      ns.Print(format("rules are now kept per character. This one starts with the %d of your rules for its spells and items; " ..
+        "copy others from Settings > Rules on other characters.", fits))
+    else
+      ns.Print("rules are now kept per character. None of your rules are for this character's spells, so it starts with none; " ..
+        "copy any from Settings > Rules on other characters.")
+    end
+  end
+end
+
+-- Other characters with rules, for "Copy rules from": { { key, label, count } }, sorted
+function ns.OtherCharacters()
+  local out = {}
+  for key, c in pairs(ProcThisDB.chars or {}) do
+    if type(c) == "table" and c ~= ns.char and #(c.rules or {}) > 0 then
+      out[#out + 1] = { key, format("%s (%d)", key, #c.rules), #c.rules }
+    end
+  end
+  table.sort(out, function(x, y) return x[1] < y[1] end)
+  if ProcThisDB.sharedRules and #ProcThisDB.sharedRules > 0 then
+    out[#out + 1] = { "*shared", format("Shared list before 1.15.0 (%d)", #ProcThisDB.sharedRules), #ProcThisDB.sharedRules }
+  end
+  return out
+end
+function ns.RulesOf(key)
+  if key == "*shared" then return ProcThisDB.sharedRules end
+  local c = ProcThisDB.chars and ProcThisDB.chars[key]
+  return type(c) == "table" and c.rules or nil
 end
 
 ---------------------------------------------------------------------------

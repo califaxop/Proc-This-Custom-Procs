@@ -94,8 +94,8 @@ local CHECKS = {
 local UNITS = { { "player", "Self" }, { "target", "Target" } }
 local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant Cast" }, { "health", "Health" }, { "mana", "Mana" },
   { "combo", "Combo Points" }, { "rage", "Rage" }, { "energy", "Energy" }, { "rule", "Rule" } }
-local HPMODES = { { "below", "Below" }, { "above", "Above" } }
-local CPMODES = { { "atleast", "At least" }, { "atmost", "At most" } }
+local OPMODES = {}
+for _, op in ipairs(ns.State.OP_ORDER) do OPMODES[#OPMODES + 1] = { op, ns.State.OPS[op] } end
 local POWER_UNIT = { combo = "points", rage = "rage", energy = "energy" }
 -- every condition reads [Kind] [Who] [What] [State]: [Debuff] [Target] [Stormstrike] [Active],
 -- [Rule] [Lightning Bolt] [Inactive], [Instant Cast] [Lightning Bolt] [Active], [Health] [Self] [Below] [40] %
@@ -229,27 +229,23 @@ local function BuildEditor(p)
     local function refresh() ui.Refresh(); Changed() end
     row.unit = UI.Toggle(row, 62, UNITS, Field(A, "unit"), refresh, "On you (Self) or on your target. Click to switch.")
     row.kind = UI.Toggle(row, 96, KINDS, Field(A, "kind"), refresh,
-      "A buff, a debuff, Instant Cast (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health or Mana (yours or your target's, below or above a %), Combo Points (at least / at most), Rage or Energy (below / above an amount), or Rule (another of your rules is active, or isn't). Click to switch; right-click to go back.")
-    -- for Combo Points rows: at least / at most, then how many
-    row.cpMode = UI.Toggle(row, 74, CPMODES, { function() local a = A(); return a and a.cpMode or "atleast" end,
-      function(v) local a = A(); if a then a.cpMode = v end end }, refresh,
-      "Glow while you have at least that many combo points on your target, or at most. Click to switch.")
+      "A buff, a debuff, Instant Cast (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health or Mana (yours or your target's, compared with a %), Combo Points, Rage or Energy (compared with an amount), or Rule (another of your rules is active, or isn't). Click to switch; right-click to go back.")
     -- for Instant rows, after the spell: instant now (Active) or not (Inactive)
     row.imode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh, "Active: glow while the spell is instant cast. Inactive: while it isn't. Click to switch.")
     -- for Rule rows, after the rule: Active / Inactive
     row.rmode = UI.Toggle(row, 70, RMODES, Field(A, "mode"), refresh,
       "Glow while the rule you pick is active (its conditions are met right now), or while it's inactive. Click to switch.")
     row.mode = UI.Toggle(row, 70, MODES, Field(A, "mode"), refresh, "Active: glow while it's on. Inactive: while it's missing. Click to switch.")
-    -- for Health and Mana rows: below or above, then the %
-    row.hpMode = UI.Toggle(row, 62, HPMODES, { function() local a = A(); return a and a.hpMode or "below" end,
-      function(v) local a = A(); if a then a.hpMode = v end end }, refresh,
-      "Glow while it's below the %, or above it. Click to switch.")
+    -- for number rows (Health, Mana, Combo Points, Rage, Energy): the comparison, then the number
+    row.op = UI.Toggle(row, 40, OPMODES, { function() return ns.State.Op(A()) end,
+      function(v) local a = A(); if a then a.op = v end end }, refresh,
+      "Compare with the number: > more than, >= at least, < less than, <= at most, = exactly. Click to switch; right-click to go back.")
     row.pct = UI.Edit(row, 40, { function() local a = A(); return a and (a.pct or 40) end,
       function(v)
         local a = A()
         if not a then return end
         local hi = (a.kind == "combo") and 5 or ((a.kind == "rage" or a.kind == "energy") and 150 or 100)
-        local lo = (a.kind == "rage" or a.kind == "energy") and 0 or 1
+        local lo = 0
         a.pct = math.max(lo, math.min(hi, math.floor(tonumber(v) or 40))); refresh()
       end },
       "40", false, true)
@@ -320,24 +316,22 @@ local function BuildEditor(p)
       -- (a combo points row starts at 5; a number from another kind of row is brought into range)
       if a.kind == "combo" and (not a.pct or a.pct > 5) then a.pct = 5 end
       if (a.kind == "rage" or a.kind == "energy") and not a.pct then a.pct = 50 end
-      for _, w in ipairs({ row.unit, row.imode, row.rmode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.hpMode, row.cpMode, row.pct, row.ruleSel }) do w.Refresh() end
+      for _, w in ipairs({ row.unit, row.imode, row.rmode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.op, row.pct, row.ruleSel }) do w.Refresh() end
       local instant = a.kind == "instant"
-      local health = a.kind == "health" or a.kind == "mana" or power -- (a below / above row with a number)
+      local health = a.kind == "health" or a.kind == "mana" or power -- (a row that compares a number)
       row.pctSign:SetText(POWER_UNIT[a.kind] or "%")
       row.unit:SetShown(not instant and not isRule and not power); row.mode:SetShown(not instant and not health and not isRule)
-      row.cpMode:SetShown(a.kind == "combo")
       row.name:SetWidth(instant and 150 or 116)
       row.imode:SetShown(instant); row.rmode:SetShown(isRule)
-      row.hpMode:SetShown(health and a.kind ~= "combo"); row.pct:SetShown(health); row.pctSign:SetShown(health)
+      row.op:SetShown(health); row.pct:SetShown(health); row.pctSign:SetShown(health)
       row.ruleSel:SetShown(isRule)
       row.name:SetShown(not health and not isRule)
       -- [Kind] [Who] [What] [State], left to right (the dot and the remove button after)
       local chain
       if isRule then chain = { row.kind, row.ruleSel, row.rmode }
       elseif instant then chain = { row.kind, row.name, row.imode }
-      elseif a.kind == "combo" then chain = { row.kind, row.cpMode, row.pct, row.pctSign }
-      elseif power then chain = { row.kind, row.hpMode, row.pct, row.pctSign }
-      elseif health then chain = { row.kind, row.unit, row.hpMode, row.pct, row.pctSign }
+      elseif power then chain = { row.kind, row.op, row.pct, row.pctSign }
+      elseif health then chain = { row.kind, row.unit, row.op, row.pct, row.pctSign }
       else chain = { row.kind, row.unit, row.name, row.mode } end
       for j, w in ipairs(chain) do
         w:ClearAllPoints()
@@ -529,8 +523,7 @@ local function BuildEditor(p)
         local now = v and tostring(v)
           or (why == "stale" and "|cffffd200unknown since you changed target|r")
           or "|cffffd200hidden: the game decides|r"
-        local cond = (a.kind == "combo") and format("%s %d", a.cpMode == "atmost" and "at most" or "at least", tonumber(a.pct) or 5)
-          or format("%s %d", a.hpMode == "above" and "above" or "below", tonumber(a.pct) or 50)
+        local cond = format("%s %d", ns.State.OPS[ns.State.Op(a)], tonumber(a.pct) or (a.kind == "combo" and 5 or 50))
         lines[#lines + 1] = format("Your %s: %s (glows at %s)", p.label, now, cond)
       elseif a.kind == "health" or a.kind == "mana" then
         local unit = a.unit == "target" and "target" or "player"
@@ -540,7 +533,7 @@ local function BuildEditor(p)
         local now = v and format("%d%%", math.floor(v + 0.5))
           or (why == "none" and "no target") or (why == "nomana" and "no mana")
           or "|cffffd200hidden: the game decides|r"
-        lines[#lines + 1] = format("%s: %s (glows %s %d%%)", who, now, a.hpMode == "above" and "above" or "below", tonumber(a.pct) or 40)
+        lines[#lines + 1] = format("%s: %s (glows at %s %d%%)", who, now, ns.State.OPS[ns.State.Op(a)], tonumber(a.pct) or 40)
       elseif an and a.kind == "instant" then
         local ct = ns.State.CastTime(an)
         lines[#lines + 1] = format("%s: %s", an, ct == nil and "|cffffd200cast time hidden|r"
@@ -576,6 +569,7 @@ local function BuildList(p)
 
   l.add = UI.Button(p, "+ Add rule", 96, function()
     local r = ns.Copy(ns.NEW_RULE); r.id = ns.NewRuleId()
+    if ns.char then ns.char.fresh = nil end -- (you're making this character's rules yourself)
     table.insert(ns.db.rules, r)
     selected = #ns.db.rules; ui.Refresh(); Changed()
   end)
@@ -672,6 +666,37 @@ local function PageSettings(pg)
 
   local note = UI.Text(pg, "note", "Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, in the Rules tab.")
   note:SetPoint("TOPLEFT", 0, -112); note:SetWidth(700)
+
+  -- rules are per character: copy another character's into this one
+  local sec5 = UI.Section(pg, "Rules on other characters", 700); sec5:SetPoint("TOPLEFT", 0, -150)
+  local here = UI.Text(pg, "line", ""); here:SetPoint("TOPLEFT", 0, -182); here:SetWidth(700)
+  local others, pick = {}, nil
+  local from = track(UI.Toggle(pg, 300, others, { function() return pick end, function(v) pick = v end }, nil,
+    "Which character's rules to copy. Click to switch; right-click to go back."))
+  from:SetPoint("TOPLEFT", 0, -206)
+  local copy = UI.Button(pg, "Copy to this character", 170, function()
+    local src = pick and ns.RulesOf(pick)
+    if not src then return end
+    local n = ns.AddRuleCopies(src)
+    ns.Print(format("copied %d rule%s from %s.", n, n == 1 and "" or "s", pick == "*shared" and "the shared list" or pick))
+    if ui then ui.Refresh() end
+    Changed(); from.Refresh()
+  end)
+  copy:SetPoint("LEFT", from, "RIGHT", 8, 0)
+  local cnote = UI.Text(pg, "note", "Copies are added to this character's rules (nothing is replaced); remove the ones you don't need in the Rules tab.")
+  cnote:SetPoint("TOPLEFT", 0, -236); cnote:SetWidth(700)
+  local r0 = from.Refresh
+  from.Refresh = function()
+    wipe(others)
+    for _, o in ipairs(ns.OtherCharacters()) do others[#others + 1] = { o[1], o[2] } end
+    local valid = false
+    for _, o in ipairs(others) do if o[1] == pick then valid = true end end
+    if not valid then pick = others[1] and others[1][1] or nil end
+    if #others == 0 then others[1] = { nil, "(no other character has rules yet)" } end
+    here:SetText(format("Rules on %s: %d", ns.CharKey(), #ns.db.rules))
+    r0()
+    copy.SetActive(pick ~= nil)
+  end
 end
 
 local function PageHelp(pg)
@@ -699,7 +724,9 @@ local function PageHelp(pg)
   para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
     "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
   para("Rule rows: another of your rules is active (its conditions are met right now) or isn't. Example: Earth Shock glows while your Flame Shock rule is inactive. A rule can't depend on itself, and rules that depend on each other in a loop never glow.", "note")
-  para("Health and Mana rows: yours or your target's, below or above a %. Example: Healing Wave glows while your target is below 40% health; Evocation while your mana is below 20%. When the game hides the value (health in combat, your mana always), the game itself checks it against your % and switches the glow: Proc This! never sees the number. A dead target, or one without mana, never counts.", "note")
+  para("Health and Mana rows: yours or your target's, compared with a %: > (more than), >= (at least), < (less than), <= (at most) or = (exactly). Example: Healing Wave glows while your target's health is < 40%; Evocation while your mana is < 20%. When the game hides the value (health in combat, your mana always), the game itself checks it against your % and switches the glow: Proc This! never sees the number. A dead target, or one without mana, never counts.", "note")
+  para("Combo Points, Rage and Energy rows: yours, compared with an amount the same way. Example: Eviscerate glows while your combo points are >= 5, or = 3; Sinister Strike while your energy is >= 45. Combo points are always readable; when the game hides rage or energy (in combat), the game itself checks them.", "note")
+  para("Rules are kept per character: each character has its own list. Settings > Rules on other characters copies another character's rules into this one.", "note")
   para("Instant Cast rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt cast <spell> shows a spell's cast time.", "note")
   para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
     "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /pt cast <spell>  its cast time now")
@@ -756,6 +783,19 @@ ev:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == ns.name then
     ns.LoadDB()
   elseif event == "PLAYER_LOGIN" then
+    -- a character's first login: its rules from the old shared list (once its spellbook is in)
+    local okS, eS = pcall(ns.SetUpCharacter, false)
+    if not okS then ns.Print("start-up error: " .. tostring(eS)) end
+    if ns.char and ns.char.fresh then
+      local sc = CreateFrame("Frame")
+      sc:RegisterEvent("SPELLS_CHANGED")
+      sc:SetScript("OnEvent", function(self)
+        self:UnregisterAllEvents()
+        pcall(ns.SetUpCharacter, true)
+        if ns.Glow.Update then pcall(ns.Glow.Update) end
+        if ui and win and win:IsShown() then ui.Refresh() end
+      end)
+    end
     local ok, e = pcall(ns.Glow.Init)
     if not ok then ns.Print("start-up error: " .. tostring(e)) end
     -- say once when another UI is found and its mode turned on

@@ -246,6 +246,34 @@ function S.Meets(mode, v, pct)
   elseif mode == "atleast" then return v >= pct else return v <= pct end
 end
 
+-- Number rows compare with an operator: >, >=, <, <=, =
+S.OPS = { gt = ">", ge = ">=", lt = "<", le = "<=", eq = "=" }
+S.OP_ORDER = { "gt", "ge", "lt", "le", "eq" }
+local OP_MODE = { lt = "below", le = "atmost", gt = "above", ge = "atleast" }
+-- a row's operator (rows from before operators: their Below / Above / At least / At most)
+local OLD_OP = { below = "lt", above = "gt", atleast = "ge", atmost = "le" }
+function S.Op(a)
+  if not a then return "lt" end
+  if S.OPS[a.op] then return a.op end
+  if a.kind == "combo" then return OLD_OP[a.cpMode] or "ge" end
+  return OLD_OP[a.hpMode] or "lt"
+end
+function S.OpMeets(op, v, n)
+  if op == "eq" then return math.floor(v + 0.5) == n end
+  return S.Meets(OP_MODE[op] or "below", v, n)
+end
+-- For a hidden value, the steps the game checks it against: { { mode, pct }, ... }, all must hold.
+-- scale: % per unit. "=" is the band that rounds to n.
+function S.OpSteps(op, n, scale)
+  if op == "eq" then
+    local steps = {}
+    if n - 0.5 > 0 then steps[#steps + 1] = { "atleast", (n - 0.5) * scale } end
+    steps[#steps + 1] = { "below", (n + 0.5) * scale }
+    return steps
+  end
+  return { { OP_MODE[op] or "below", n * scale } }
+end
+
 -- a unit's mana in percent; nil, "hidden" when the game hides it (your own mana always is, on
 -- Forever); nil, "none" for no such unit; nil, "nomana" for a unit without mana
 function S.ManaPct(unit)

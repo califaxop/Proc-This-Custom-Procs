@@ -387,46 +387,49 @@ function G.CheckAura(rule, a)
     local what = a.kind
     local unit = (a.unit == "target") and "target" or "player"
     local who = unit == "target" and "your target" or "you"
-    local pct = math.max(1, math.min(100, tonumber(a.pct) or 40))
-    local mode = (a.hpMode == "above") and "above" or "below"
-    local words = mode == "below" and "below" or "above"
+    local pct = math.max(0, math.min(100, tonumber(a.pct) or 40))
+    local op = S.Op(a)
+    local words = S.OPS[op]
     if not UnitExists(unit) then return false, "no target" end
     if S.IsDead(unit) then return false, who .. (unit == "target" and " is dead" or " are dead") end
     local v, why
     if what == "health" then v, why = S.HealthPct(unit) else v, why = S.ManaPct(unit) end
     if why == "nomana" then return false, who .. (unit == "target" and " has no mana" or " have no mana") end
     if v then
-      if S.Meets(mode, v, pct) then return true end
+      if S.OpMeets(op, v, pct) then return true end
       return false, format("%s at %d%% %s (needs %s %d%%)", who, math.floor(v + 0.5), what, words, pct)
     end
-    local curve = S.StepCurve(mode, pct)
     local api = (what == "health") and UnitHealthPercent or UnitPowerPercent
-    if not (curve and api) then return false, format("%s %s is hidden, and this client can't check it", who, what) end
-    return true, nil, { { kind = "pct", what = what, unit = unit, mode = mode, pct = pct, curve = curve } }
+    local gs = {}
+    for _, st in ipairs(S.OpSteps(op, pct, 1)) do
+      local curve = S.StepCurve(st[1], st[2])
+      if not (curve and api) then return false, format("%s %s is hidden, and this client can't check it", who, what) end
+      gs[#gs + 1] = { kind = "pct", what = what, unit = unit, mode = st[1], pct = st[2], curve = curve }
+    end
+    return true, nil, gs
   end
   if S.POWER[a.kind] then
-    -- Combo Points (at least / at most N), Rage and Energy (below / above N)
+    -- Combo Points, Rage and Energy: >, >=, <, <=, = an amount
     local kind, p = a.kind, S.POWER[a.kind]
     local max = S.PowerMax(kind)
-    local n = tonumber(a.pct) or (kind == "combo" and 5 or 50)
-    local mode
-    if kind == "combo" then
-      n = math.max(1, math.min(max, math.floor(n)))
-      mode = (a.cpMode == "atmost") and "atmost" or "atleast"
-    else
-      n = math.max(0, math.min(max, n))
-      mode = (a.hpMode == "above") and "above" or "below"
-    end
-    local words = ({ atleast = "at least", atmost = "at most", above = "above", below = "below" })[mode]
+    local n = math.floor(tonumber(a.pct) or (kind == "combo" and 5 or 50))
+    n = math.max(0, math.min(max, n))
+    local op = S.Op(a)
+    local words = S.OPS[op]
     local v, why = S.PowerAmount(kind)
     if v then
-      if S.Meets(mode, v, n) then return true end
+      if S.OpMeets(op, v, n) then return true end
       return false, format("%d %s (needs %s %d)", v, p.label, words, n)
     end
     if why == "stale" then return false, "combo points unknown since you changed target (until you gain one)" end
-    local curve = S.StepCurve(mode, n / max * 100)
-    if not (curve and UnitPowerPercent) then return false, format("your %s are hidden, and this client can't check them", p.label) end
-    return true, nil, { { kind = "pct", what = kind, unit = "player", mode = mode, pct = n / max * 100, curve = curve, powerType = p.type } }
+    if not UnitPowerPercent then return false, format("your %s are hidden, and this client can't check them", p.label) end
+    local gs = {}
+    for _, st in ipairs(S.OpSteps(op, n, 100 / max)) do
+      local curve = S.StepCurve(st[1], st[2])
+      if not curve then return false, format("your %s are hidden, and this client can't check them", p.label) end
+      gs[#gs + 1] = { kind = "pct", what = kind, unit = "player", mode = st[1], pct = st[2], curve = curve, powerType = p.type }
+    end
+    return true, nil, gs
   end
   if a.kind == "rule" then
     -- "Rule X is (not) active": that rule's own conditions met right now
