@@ -699,11 +699,14 @@ local function PageSettings(pg)
   end
 end
 
-local function PageHelp(pg)
+local function PageHelp(page)
+  -- (more than fits: it scrolls)
+  local scroll, pg = UI.Scroll(page, 708, PAGE_H)
+  scroll:SetPoint("TOPLEFT")
   local y = 0
-  local function sec(t) local s = UI.Section(pg, t, 700); s:SetPoint("TOPLEFT", 0, y); y = y - 32 end
+  local function sec(t) local s = UI.Section(pg, t, 684); s:SetPoint("TOPLEFT", 0, y); y = y - 32 end
   local function para(t, color)
-    local fs = UI.Text(pg, color or "line", t); fs:SetWidth(700); fs:SetPoint("TOPLEFT", 0, y)
+    local fs = UI.Text(pg, color or "line", t); fs:SetWidth(684); fs:SetPoint("TOPLEFT", 0, y)
     y = y - (fs:GetStringHeight() or 14) - 8
   end
   sec("How rules work")
@@ -738,7 +741,9 @@ local function PageHelp(pg)
   local fbn = UI.Text(pg, "note", "Opens a link to copy: a short form for bugs or ideas.")
   fbn:SetPoint("LEFT", fb, "RIGHT", 10, 0)
   y = y - 30
-  pg:SetScript("OnShow", function()
+  pg:SetHeight(-y + 10)
+  page:SetScript("OnShow", function()
+    scroll:SetVerticalScroll(0); scroll.Update()
     local on = GetCVarBool and GetCVarBool("cooldownViewerEnabled")
     cdm:SetText(on and "|cff60ff60Cooldown Manager: on|r" or "|cffff6060Cooldown Manager: off. Turn it on in Options > Gameplay Enhancements.|r")
   end)
