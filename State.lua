@@ -180,7 +180,7 @@ function S.UseDebuffCharge(name)
   local c = castAt[name]
   if c and c.left then c.left = c.left - 1 end
 end
-function S.OnTargetChanged() wipe(castAt) end
+function S.OnTargetChanged() wipe(castAt); S.comboStale = true end
 
 ---------------------------------------------------------------------------
 -- One aura condition of a rule (see ns.NEW_AURA): on you or your target, a buff or a debuff.
@@ -258,6 +258,104 @@ function S.ManaPct(unit)
     return p / m * 100
   end
   return nil, "hidden"
+end
+
+---------------------------------------------------------------------------
+-- Your combo points, rage and energy. Forever may hide them from addons like your mana; then, as
+-- for health and mana, the game itself checks them against the row's line (UnitPowerPercent with
+-- a step curve) and Proc This! never sees the number.
+-- Combo points sit on your target in Forever: after you change targets, the game's power count can
+-- still be the old target's until points are gained or move over (COMBO_TARGET_CHANGED), so until
+-- then a hidden count isn't trusted.
+---------------------------------------------------------------------------
+local PT = Enum and Enum.PowerType or {}
+S.POWER = {
+  combo = { type = PT.ComboPoints or 4, max = 5, label = "combo points" },
+  rage = { type = PT.Rage or 1, max = 100, label = "rage" },
+  energy = { type = PT.Energy or 3, max = 100, label = "energy" },
+}
+S.comboStale = false
+-- (a power update or the points moving over: the count is your target's again)
+function S.OnPower(token)
+  if token == nil or token == "COMBO_POINTS" then S.comboStale = false end
+end
+function S.OnComboTarget() S.comboStale = false end
+
+-- the most you can have (readable, else the usual)
+function S.PowerMax(kind)
+  local p = S.POWER[kind]
+  if not p then return nil end
+  local ok, m = pcall(UnitPowerMax, "player", p.type)
+  if ok and Readable(m) and type(m) == "number" and m > 0 then return m end
+  return p.max
+end
+
+-- what you have now; nil, "hidden" when the game hides it; nil, "stale" for combo points right after
+-- a target change (hidden ones only)
+function S.PowerAmount(kind)
+  local p = S.POWER[kind]
+  if not p then return nil, "unknown" end
+  if kind == "combo" then
+    if not UnitExists("target") then return 0 end
+    if GetComboPoints then
+      local ok, c = pcall(GetComboPoints, "player", "target")
+      if ok and Readable(c) and type(c) == "number" then return c end
+    end
+    if S.comboStale then return nil, "stale" end
+  end
+  local ok, v = pcall(UnitPower, "player", p.type)
+  if ok and Readable(v) and type(v) == "number" then return v end
+  return nil, "hidden"
+end
+
+-- /pt power: what the game lets Proc This! see of each, right now
+function S.PowerReport()
+  local lines = {}
+  local function sec(t)
+    local out = {}
+    if C_Secrets and C_Secrets.GetPowerTypeSecrecy then
+      local ok, lvl = pcall(C_Secrets.GetPowerTypeSecrecy, t)
+      local names = { [0] = "never hidden", [1] = "always hidden", [2] = "hidden at times" }
+      out[#out + 1] = ok and (names[lvl] or tostring(lvl)) or "?"
+    end
+    if C_Secrets and C_Secrets.ShouldUnitPowerBeSecret then
+      local ok, v = pcall(C_Secrets.ShouldUnitPowerBeSecret, "player", t)
+      out[#out + 1] = ok and (v and "hidden now" or "readable now") or "?"
+    end
+    return table.concat(out, ", ")
+  end
+  local mana = PT.Mana or 0
+  for _, k in ipairs({ "combo", "rage", "energy", "mana" }) do
+    local t = (k == "mana") and mana or S.POWER[k].type
+    local label = (k == "mana") and "mana" or S.POWER[k].label
+    local okV, v = pcall(UnitPower, "player", t)
+    local val = (okV and Readable(v)) and tostring(v) or (okV and "hidden" or "error")
+    local okM, m = pcall(UnitPowerMax, "player", t)
+    local max = (okM and Readable(m)) and tostring(m) or (okM and "hidden" or "error")
+    -- the game-side check: does a step curve come back, and does a frame take it?
+    local check = "no curve support"
+    local curve = S.StepCurve("atleast", 50)
+    if curve and UnitPowerPercent then
+      local okP, r = pcall(UnitPowerPercent, "player", t, false, curve)
+      if not okP then check = "the game refused: " .. tostring(r)
+      elseif r == nil then check = "no answer"
+      else
+        S.probe = S.probe or CreateFrame("Frame")
+        local okA = pcall(S.probe.SetAlpha, S.probe, r)
+        check = (okA and "works" or "answer can't drive a glow") .. ((isSecret and isSecret(r)) and " (hidden answer)" or "")
+      end
+    end
+    local secrecy = sec(t)
+    lines[#lines + 1] = format("%s: now %s / max %s; %sgame-side check: %s", label, val, max, secrecy ~= "" and (secrecy .. "; ") or "", check)
+  end
+  if GetComboPoints then
+    local ok, c = pcall(GetComboPoints, "player", "target")
+    lines[#lines + 1] = "combo points on your target: " .. (not UnitExists("target") and "no target" or
+      (ok and (Readable(c) and tostring(c) or "hidden") or "error"))
+      .. (S.comboStale and " (just changed target: not trusted until points change)" or "")
+  end
+  lines[#lines + 1] = "in combat: " .. ((InCombatLockdown and InCombatLockdown()) and "yes" or "no")
+  return lines
 end
 
 -- a unit's health in percent, or nil when the game hides it (or there's no such unit)

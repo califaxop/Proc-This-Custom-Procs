@@ -172,7 +172,8 @@ local function SetGate(g, gate)
       ok, v = pcall(UnitHealthPercent, gate.unit, true, gate.curve)
     else
       if not UnitPowerPercent then return false end
-      ok, v = pcall(UnitPowerPercent, gate.unit, (Enum and Enum.PowerType and Enum.PowerType.Mana) or 0, false, gate.curve)
+      local pt = gate.powerType or ((Enum and Enum.PowerType and Enum.PowerType.Mana) or 0)
+      ok, v = pcall(UnitPowerPercent, gate.unit, pt, false, gate.curve)
     end
     if not ok or v == nil then return false end
     return (pcall(g.SetAlpha, g, v))
@@ -403,6 +404,30 @@ function G.CheckAura(rule, a)
     if not (curve and api) then return false, format("%s %s is hidden, and this client can't check it", who, what) end
     return true, nil, { { kind = "pct", what = what, unit = unit, mode = mode, pct = pct, curve = curve } }
   end
+  if S.POWER[a.kind] then
+    -- Combo Points (at least / at most N), Rage and Energy (below / above N)
+    local kind, p = a.kind, S.POWER[a.kind]
+    local max = S.PowerMax(kind)
+    local n = tonumber(a.pct) or (kind == "combo" and 5 or 50)
+    local mode
+    if kind == "combo" then
+      n = math.max(1, math.min(max, math.floor(n)))
+      mode = (a.cpMode == "atmost") and "atmost" or "atleast"
+    else
+      n = math.max(0, math.min(max, n))
+      mode = (a.hpMode == "above") and "above" or "below"
+    end
+    local words = ({ atleast = "at least", atmost = "at most", above = "above", below = "below" })[mode]
+    local v, why = S.PowerAmount(kind)
+    if v then
+      if S.Meets(mode, v, n) then return true end
+      return false, format("%d %s (needs %s %d)", v, p.label, words, n)
+    end
+    if why == "stale" then return false, "combo points unknown since you changed target (until you gain one)" end
+    local curve = S.StepCurve(mode, n / max * 100)
+    if not (curve and UnitPowerPercent) then return false, format("your %s are hidden, and this client can't check them", p.label) end
+    return true, nil, { { kind = "pct", what = kind, unit = "player", mode = mode, pct = n / max * 100, curve = curve, powerType = p.type } }
+  end
   if a.kind == "rule" then
     -- "Rule X is (not) active": that rule's own conditions met right now
     local other = ns.RuleById(a.rule)
@@ -423,7 +448,7 @@ function G.CheckAura(rule, a)
       if g.kind == "pct" then
         local mode = S.OPPOSITE[g.mode]
         local curve = mode and S.StepCurve(mode, g.pct)
-        if curve then return true, nil, { { kind = "pct", what = g.what, unit = g.unit, mode = mode, pct = g.pct, curve = curve } } end
+        if curve then return true, nil, { { kind = "pct", what = g.what, unit = g.unit, mode = mode, pct = g.pct, curve = curve, powerType = g.powerType } } end
       end
     end
     return false, format("can't tell in combat whether rule %s is inactive: it hangs on several hidden values", label)
@@ -622,10 +647,10 @@ function G.Init()
     "PLAYER_REGEN_DISABLED", "ACTIONBAR_SLOT_CHANGED", "UPDATE_MACROS", "ACTIONBAR_PAGE_CHANGED",
     "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED",
     "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE",
-    "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "PLAYER_TARGET_CHANGED" }) do
+    "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "PLAYER_TARGET_CHANGED", "COMBO_TARGET_CHANGED" }) do
     pcall(ev.RegisterEvent, ev, e)
   end
-  for _, e in ipairs({ "UNIT_POWER_FREQUENT", "UNIT_COMBAT", "UNIT_SPELLCAST_SUCCEEDED" }) do
+  for _, e in ipairs({ "UNIT_POWER_FREQUENT", "UNIT_POWER_UPDATE", "UNIT_COMBAT", "UNIT_SPELLCAST_SUCCEEDED" }) do
     pcall(ev.RegisterUnitEvent, ev, e, "player")
   end
   pcall(ev.RegisterUnitEvent, ev, "UNIT_AURA", "player", "target")
@@ -642,6 +667,10 @@ function G.Init()
       S.OnCast(a3)
     elseif event == "PLAYER_TARGET_CHANGED" then
       S.OnTargetChanged()
+    elseif event == "COMBO_TARGET_CHANGED" then
+      S.OnComboTarget()
+    elseif (event == "UNIT_POWER_FREQUENT" or event == "UNIT_POWER_UPDATE") and a1 == "player" then
+      S.OnPower(a2)
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
       S.OnOverlay(true, a1)
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then

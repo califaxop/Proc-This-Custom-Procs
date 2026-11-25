@@ -85,15 +85,18 @@ local EW = EDIT_W - 16 -- editor content width
 ---------------------------------------------------------------------------
 local CHECKS = {
   { "melee",   "Being attacked in melee" },
-  { "usable",  "Castable (known, enough mana)" },
+  { "usable",  "Castable (known, enough mana / rage / energy)" },
   { "ready",   "Off cooldown (GCD ignored)" },
   { "control", "I have control (not stunned)" },
   { "combat",  "Only in combat" },
   { "proc",    "The game flags it as a proc" },
 }
 local UNITS = { { "player", "Self" }, { "target", "Target" } }
-local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant Cast" }, { "health", "Health" }, { "mana", "Mana" }, { "rule", "Rule" } }
+local KINDS = { { "buff", "Buff" }, { "debuff", "Debuff" }, { "instant", "Instant Cast" }, { "health", "Health" }, { "mana", "Mana" },
+  { "combo", "Combo Points" }, { "rage", "Rage" }, { "energy", "Energy" }, { "rule", "Rule" } }
 local HPMODES = { { "below", "Below" }, { "above", "Above" } }
+local CPMODES = { { "atleast", "At least" }, { "atmost", "At most" } }
+local POWER_UNIT = { combo = "points", rage = "rage", energy = "energy" }
 -- every condition reads [Kind] [Who] [What] [State]: [Debuff] [Target] [Stormstrike] [Active],
 -- [Rule] [Lightning Bolt] [Inactive], [Instant Cast] [Lightning Bolt] [Active], [Health] [Self] [Below] [40] %
 local IMODES = { { "present", "Active" }, { "missing", "Inactive" } }
@@ -225,8 +228,12 @@ local function BuildEditor(p)
     local function A() local r = Rule(); return r and r.auras[i] end
     local function refresh() ui.Refresh(); Changed() end
     row.unit = UI.Toggle(row, 62, UNITS, Field(A, "unit"), refresh, "On you (Self) or on your target. Click to switch.")
-    row.kind = UI.Toggle(row, 86, KINDS, Field(A, "kind"), refresh,
-      "A buff, a debuff, Instant Cast (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health or Mana (yours or your target's, below or above a %), or Rule (another of your rules is active, or isn't). Click to switch.")
+    row.kind = UI.Toggle(row, 96, KINDS, Field(A, "kind"), refresh,
+      "A buff, a debuff, Instant Cast (the spell is instant cast right now: Maelstrom Weapon at 5, Nature's Swiftness...), Health or Mana (yours or your target's, below or above a %), Combo Points (at least / at most), Rage or Energy (below / above an amount), or Rule (another of your rules is active, or isn't). Click to switch; right-click to go back.")
+    -- for Combo Points rows: at least / at most, then how many
+    row.cpMode = UI.Toggle(row, 74, CPMODES, { function() local a = A(); return a and a.cpMode or "atleast" end,
+      function(v) local a = A(); if a then a.cpMode = v end end }, refresh,
+      "Glow while you have at least that many combo points on your target, or at most. Click to switch.")
     -- for Instant rows, after the spell: instant now (Active) or not (Inactive)
     row.imode = UI.Toggle(row, 70, IMODES, Field(A, "mode"), refresh, "Active: glow while the spell is instant cast. Inactive: while it isn't. Click to switch.")
     -- for Rule rows, after the rule: Active / Inactive
@@ -238,7 +245,13 @@ local function BuildEditor(p)
       function(v) local a = A(); if a then a.hpMode = v end end }, refresh,
       "Glow while it's below the %, or above it. Click to switch.")
     row.pct = UI.Edit(row, 40, { function() local a = A(); return a and (a.pct or 40) end,
-      function(v) local a = A(); if a then a.pct = math.max(1, math.min(100, math.floor(tonumber(v) or 40))); refresh() end end },
+      function(v)
+        local a = A()
+        if not a then return end
+        local hi = (a.kind == "combo") and 5 or ((a.kind == "rage" or a.kind == "energy") and 150 or 100)
+        local lo = (a.kind == "rage" or a.kind == "energy") and 0 or 1
+        a.pct = math.max(lo, math.min(hi, math.floor(tonumber(v) or 40))); refresh()
+      end },
       "40", false, true)
     row.pctSign = UI.Text(row, "line", "%")
     row.pctSign:SetPoint("LEFT", row.pct, "RIGHT", 4, 0)
@@ -303,20 +316,27 @@ local function BuildEditor(p)
       if #row.ruleOpts == 0 then row.ruleOpts[1] = { false, "(add another rule first)" } end
       -- a Rule row points at the first of them until one is picked
       if isRule and (not ns.RuleById(a.rule) or a.rule == r.id) then a.rule = row.ruleOpts[1][1] or nil end
-      for _, w in ipairs({ row.unit, row.imode, row.rmode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.hpMode, row.pct, row.ruleSel }) do w.Refresh() end
+      local power = POWER_UNIT[a.kind] ~= nil
+      -- (a combo points row starts at 5; a number from another kind of row is brought into range)
+      if a.kind == "combo" and (not a.pct or a.pct > 5) then a.pct = 5 end
+      if (a.kind == "rage" or a.kind == "energy") and not a.pct then a.pct = 50 end
+      for _, w in ipairs({ row.unit, row.imode, row.rmode, row.kind, row.mode, row.name, row.mine, row.dur, row.charges, row.usedBy, row.hpMode, row.cpMode, row.pct, row.ruleSel }) do w.Refresh() end
       local instant = a.kind == "instant"
-      local health = a.kind == "health" or a.kind == "mana" -- (both are a % row)
-      row.pctSign:SetText("%")
-      row.unit:SetShown(not instant and not isRule); row.mode:SetShown(not instant and not health and not isRule)
+      local health = a.kind == "health" or a.kind == "mana" or power -- (a below / above row with a number)
+      row.pctSign:SetText(POWER_UNIT[a.kind] or "%")
+      row.unit:SetShown(not instant and not isRule and not power); row.mode:SetShown(not instant and not health and not isRule)
+      row.cpMode:SetShown(a.kind == "combo")
       row.name:SetWidth(instant and 150 or 116)
       row.imode:SetShown(instant); row.rmode:SetShown(isRule)
-      row.hpMode:SetShown(health); row.pct:SetShown(health); row.pctSign:SetShown(health)
+      row.hpMode:SetShown(health and a.kind ~= "combo"); row.pct:SetShown(health); row.pctSign:SetShown(health)
       row.ruleSel:SetShown(isRule)
       row.name:SetShown(not health and not isRule)
       -- [Kind] [Who] [What] [State], left to right (the dot and the remove button after)
       local chain
       if isRule then chain = { row.kind, row.ruleSel, row.rmode }
       elseif instant then chain = { row.kind, row.name, row.imode }
+      elseif a.kind == "combo" then chain = { row.kind, row.cpMode, row.pct, row.pctSign }
+      elseif power then chain = { row.kind, row.hpMode, row.pct, row.pctSign }
       elseif health then chain = { row.kind, row.unit, row.hpMode, row.pct, row.pctSign }
       else chain = { row.kind, row.unit, row.name, row.mode } end
       for j, w in ipairs(chain) do
@@ -503,6 +523,15 @@ local function BuildEditor(p)
             (on2 and gs2 and #gs2 > 0) and "|cffffd200active when the game says so (hidden values)|r"
             or (on2 and "|cff60ff60active|r" or "not active"))
         end
+      elseif ns.State.POWER[a.kind] then
+        local p = ns.State.POWER[a.kind]
+        local v, why = ns.State.PowerAmount(a.kind)
+        local now = v and tostring(v)
+          or (why == "stale" and "|cffffd200unknown since you changed target|r")
+          or "|cffffd200hidden: the game decides|r"
+        local cond = (a.kind == "combo") and format("%s %d", a.cpMode == "atmost" and "at most" or "at least", tonumber(a.pct) or 5)
+          or format("%s %d", a.hpMode == "above" and "above" or "below", tonumber(a.pct) or 50)
+        lines[#lines + 1] = format("Your %s: %s (glows at %s)", p.label, now, cond)
       elseif a.kind == "health" or a.kind == "mana" then
         local unit = a.unit == "target" and "target" or "player"
         local v, why
@@ -797,6 +826,10 @@ SlashCmdList.PROCTHIS = function(msg)
   if castArg then ShowCast(castArg); return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
+  if (msg or ""):lower():match("^power") then
+    for _, l in ipairs(ns.State.PowerReport()) do ns.Print(l) end
+    return
+  end
   local ok, e = pcall(ns.OpenOptions)
   if not ok then ns.Print("settings error: " .. tostring(e)) end
 end
