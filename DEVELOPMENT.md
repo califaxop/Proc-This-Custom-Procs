@@ -14,7 +14,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 | 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | Done in 1.17.0, verified in game, reviewed |
 | 3 | Spell, item and aura tracking (compatibility layer, macros) | Done in 1.18.0, verified in game, reviewed |
 | 4 | Button discovery and rendering (providers, lifecycle, profiling) | Done in 1.19.0, verified in game, reviewed |
-| 5 | User experience (live status, priority, templates, import / export) | **Done in 1.20.0, waiting for in-game validation and review** |
+| 5 | User experience (live status, priority, templates, import / export) | Done in 1.20.0, verified in game |
 | 6 | Diagnostics and release readiness | Not started |
 
 ## Conventions
@@ -431,6 +431,12 @@ Milestone 4 verified in game; awaiting review before Milestone 5.
 5. Share rules...: Export this rule (Flame Shock), Ctrl+C; paste it into the box again and Import:
    a copy appears. Paste "hello" and Import: refused with a reason.
 6. Any "can't tell" or "error": screenshot it with the rule's settings.
+
+Results (1.20.0 test build, Shaman): 1-6 all pass (reported by the author: status dots and their
+tooltips, Duplicate and Up / Down priority, the debuff template with and without a target, export,
+import of the copy, "hello" refused).
+
+Milestone 5 verified in game.
 
 ## Known limitations
 
