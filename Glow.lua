@@ -506,6 +506,9 @@ function G.CheckAura(rule, a)
   local an = ns.AuraLabel and ns.AuraLabel(rule, a) or ns.AuraName(rule, a)
   if not an then return R.UNKNOWN, "name the aura" end
   local who = (a.unit == "target") and "your target" or "you"
+  -- no target: a target row doesn't hold, "missing" included (1.20.0; before, "missing" held, so a
+  -- debuff rule glowed with nothing targeted)
+  if a.unit == "target" and not UnitExists("target") then return R.FALSE, "no target" end
   local selfOnly = (a.name or "") == "" or a.name == ns.RuleSpellName(rule)
   local has, how, detail = S.AuraPresent(a, an, selfOnly)
   if has == nil then

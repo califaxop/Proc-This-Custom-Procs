@@ -13,8 +13,8 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 | 1 | Condition engine reliability | Done in 1.16.0, verified in game, reviewed |
 | 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | Done in 1.17.0, verified in game, reviewed |
 | 3 | Spell, item and aura tracking (compatibility layer, macros) | Done in 1.18.0, verified in game, reviewed |
-| 4 | Button discovery and rendering (providers, lifecycle, profiling) | **Done in 1.19.0, verified in game, waiting for review** |
-| 5 | User experience (live status, priority, templates, import / export) | Not started |
+| 4 | Button discovery and rendering (providers, lifecycle, profiling) | Done in 1.19.0, verified in game, reviewed |
+| 5 | User experience (live status, priority, templates, import / export) | **Done in 1.20.0, waiting for in-game validation and review** |
 | 6 | Diagnostics and release readiness | Not started |
 
 ## Conventions
@@ -33,11 +33,12 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 
 ## Architecture (1.17.0)
 
-Load order (ProcThis.toc): Core → Compat → Result → State → Buttons → Glow → UI → Options.
+Load order (ProcThis.toc): Core → Share → Compat → Result → State → Buttons → Glow → UI → Options.
 
 | File | Module | Does |
 |---|---|---|
 | Core.lua | `ns` | Rule and condition defaults (`NEW_RULE`, `NEW_AURA`), saved variables (`ProcThisDB`: shared settings, `chars[Name-Realm].rules`), migrations of older rule formats, rule ids, per-character set-up and copying, spell / item names, glow colours and looks, EllesmereUI / FlareUI detection |
+| Share.lua | `ns.Share` | Rules as text (1.20.0): `Export(rules, rule?)` ("PT1:" and a plain serialization; one rule comes with the rules it uses), `Import(text)` (its own parser, never `loadstring`; only known fields, each checked for type and allowed values; size, depth and count limits) |
 | Compat.lua | `ns.API` | The compatibility layer (1.18.0): every game function used to read conditions and buttons, by name, with the forms it may take (newer `C_` namespaces, older globals); `API.Call` (safe: answered / failed / not on this client), `API.Has`, `/pt api` |
 | Result.lua | `ns.Result` | The result model: TRUE / FALSE / GATED / UNKNOWN / ERROR, and how they combine (AND, OR, NOT). Pure Lua |
 | State.lua | `ns.State` | Every condition reader: buffs (direct, Cooldown Manager, estimates), target debuffs (direct, Cooldown Manager, estimates from your casts per target), health / mana / combo points / rage / energy (readable, or step curves for hidden values), cast time, melee, castable, cooldown, control, combat, proc flag |
@@ -169,7 +170,7 @@ Severity: High = wrong glow in normal play; Medium = wrong in some situations; L
 | R6 | Macros: the spell or item is read every update (`GetActionInfo` subtype, `GetMacroSpell`, `GetMacroItem`); conditional macros follow what the game reports for the current conditions. Not verified for every macro form. | 1.18.0: modifier changes update at once; `/pt buttons` shows what each macro reads as, to check forms in game |
 | R7 | Buttons: a fixed list of Blizzard bars plus EllesmereUI's `EABButton1..180` (rebuilt every 5 s while EllesmereUI is on). No provider interface yet. | 1.19.0: providers (Blizzard, EllesmereUI, LibActionButton); other bar addons need a provider |
 | R8 | Every rule is evaluated on every update (events merged to 0.05 s, plus a 0.25 s tick for the melee window and Cooldown Manager changes, which have no events). Not profiled yet. | 1.19.0: only rules whose spell is on a shown button; looks set once; `/pt perf` measures it |
-| R9 | A target debuff row on "missing" with no target reads "absent" (true): the rule can glow with no target if its spell is castable. Unchanged behaviour. | M5 (review) |
+| R9 | A target debuff row on "missing" with no target reads "absent" (true): the rule can glow with no target if its spell is castable. Unchanged behaviour. | 1.20.0: no target → FALSE "no target", either mode (defect 26) |
 | R10 | During the global cooldown, a hidden cooldown flag (finding 3) reads "on cooldown": the gated glow may dip for the GCD. Safer than glowing while on cooldown. | Check in game |
 
 ## Milestone 2 (1.17.0)
@@ -245,6 +246,30 @@ Changes:
   buttons; `/pt buttons` starts with each provider's count.
 - `Options.lua`: `/pt perf`.
 
+## Milestone 5 (1.20.0)
+
+Review of the settings window and R9:
+
+| # | Sev. | Finding | Change |
+|---|---|---|---|
+| 25 | Low | A rule's status showed only for the selected rule: to see why others did or didn't glow, each had to be opened. | Each rule in the list has a live dot (green glowing, yellow the game decides, orange can't tell, red error, none: doesn't hold or off), its status line on hover |
+| 26 | Medium | R9: with no target, a target buff / debuff row on "missing" held, so a "Flame Shock missing" rule glowed with nothing targeted. | No target: a target row doesn't hold in either mode ("no target"), like health rows already |
+| 27 | Low | Rule order decides which rule's look a spell glows in and which comes first, but rules couldn't be moved. | Up / Down |
+| 28 | Low | No way to copy a rule within a character, to start from a pattern, or to share rules with another player. | Duplicate; templates; Share rules (export / import as text) |
+| 29 | Low | Options.lua: a local `R()` that only called `Rule()` (and hid `ns.Result`). | Removed |
+| 30 | Low | "Not on any of Blizzard's action bars" (since 1.19.0 other bars count too). | "Not on any shown action bar" |
+
+Templates (Core.lua `ns.TEMPLATES`, the spell left blank to fill in): your buff is missing; your
+debuff missing on target (in combat); target below 20% health; you below 40% health; instant cast
+right now; the game flags it as a proc.
+
+Import safety: the text is read by Share.lua's own parser (tables, strings, numbers, booleans:
+nothing else is understood, and nothing is run); at most 60,000 characters, 6 levels deep, 6,000
+values, 200 rules, 60 conditions a rule; only a rule's and a condition's known fields are kept,
+each checked (type, range, allowed words); the rest come from the defaults. Imported rules are
+added (new ids; Rule rows follow the imported copies; a Rule row to a rule not in the text is left
+to be picked again), nothing is replaced.
+
 ## Testing
 
 ### Offline
@@ -254,7 +279,9 @@ pip install lupa
 python3 tests/run_tests.py
 ```
 
-37 tests (1.19.0): button providers (LibActionButton, dropped buttons), rules skipped when not on
+41 tests (1.20.0): sharing (round trip, Rule rows, one rule with what it uses; bad, damaged and
+hostile text refused, unknown fields and bad values dropped), templates, duplicate and priority, no
+target; button providers (LibActionButton, dropped buttons), rules skipped when not on
 a shown button, looks set once; the compatibility layer (missing functions, older forms, errors), durations
 (kept across sessions, from tooltips), where casts went (mouseover / focus, target switch
 mid-cast, buffs on others), macros (`/pt buttons`, modifier updates); the result model (AND / OR / NOT on gate sets, partial sets, limits, and the
@@ -391,6 +418,19 @@ Results (1.19.0 test build, Shaman):
   dropped button.
 
 Milestone 4 verified in game; awaiting review before Milestone 5.
+
+### In-game checklist (Milestone 5 → 6)
+
+1. Install 1.20.0, `/reload`. No Lua errors; glows as in 1.19.0.
+2. `/pt`: each rule in the list has a dot; hover it: its status line. In combat the dots follow.
+3. Duplicate a rule, give the copy another colour, and move it Up above the original: when both
+   hold, the spell glows in the copy's colour.
+4. Pick "Your debuff missing on target", +, type Flame Shock: a rule with [Debuff] [Target] [Flame
+   Shock] [Inactive]. With no target, it doesn't glow ("no target"); with a target without it, it
+   does.
+5. Share rules...: Export this rule (Flame Shock), Ctrl+C; paste it into the box again and Import:
+   a copy appears. Paste "hello" and Import: refused with a reason.
+6. Any "can't tell" or "error": screenshot it with the rule's settings.
 
 ## Known limitations
 

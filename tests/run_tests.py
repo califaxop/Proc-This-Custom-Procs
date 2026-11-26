@@ -642,6 +642,78 @@ def _():
     """
 
 # ---------------------------------------------------------------------------------------------
+# Milestone 5: sharing, templates, priority, no target
+# ---------------------------------------------------------------------------------------------
+@test("share: export -> import gives the same rules (item links, colours, groups); Rule rows follow the copies")
+def _():
+    """
+    wipe(NS.db.rules)
+    local a = MOCK.Rule({ spell = "|cffffffff|Hitem:6948::::::::60:::::|h[Hearthstone]|h|r", color = "custom",
+      colorCustom = { 0.25, 0.5, 1 }, scale = 1.2, alpha = 0.8, join = "or", groupModes = { "all", "any" },
+      auras = { { name = "Clearcasting", unit = "player", kind = "buff", mode = "missing", group = 1 },
+                { kind = "health", unit = "target", op = "le", pct = 35, group = 2 } } })
+    local b = MOCK.Rule({ spell = "Earth Shock", auras = { { kind = "rule", rule = a.id, mode = "present" } } })
+    local text = NS.Share.Export(NS.db.rules)
+    assert(text:sub(1, 4) == "PT1:" and not text:find("|", 1, true), "no raw | in the text")
+    local rules = assert(NS.Share.Import(text))
+    assert(#rules == 2 and rules[1].spell == a.spell and rules[1].colorCustom[3] == 1 and rules[1].scale == 1.2)
+    assert(rules[1].groupModes[2] == "any" and rules[1].join == "or" and rules[1].auras[2].op == "le" and rules[1].auras[2].pct == 35)
+    local n = NS.AddRuleCopies(rules)
+    assert(n == 2 and #NS.db.rules == 4)
+    local ca, cb = NS.db.rules[3], NS.db.rules[4]
+    assert(ca.id ~= a.id and cb.auras[1].rule == ca.id, "the copy's Rule row points at the copy")
+    local one = assert(NS.Share.Import(NS.Share.Export(NS.db.rules, b)))
+    assert(#one == 2, "a rule exports with the rules it uses: " .. #one)
+    """
+
+@test("share: import never runs the text; bad text is refused; unknown fields and bad values are dropped")
+def _():
+    """
+    local r, err = NS.Share.Import("hello"); assert(not r and err:find("isn't Proc This!"), err)
+    r, err = NS.Share.Import("PT1:{os.exit()}"); assert(not r and err:find("damaged"), err)
+    r, err = NS.Share.Import('PT1:{{spell="x";'); assert(not r, "unfinished")
+    r, err = NS.Share.Import("PT1:" .. string.rep("{", 20) .. string.rep("}", 20)); assert(not r and err:find("deep"), err)
+    r = assert(NS.Share.Import('PT1:{{spell="Purge";alpha=5;evil="x";enabled="yes";auras={{kind="nope";unit="target";pct=50;};};};}'))
+    assert(r[1].spell == "Purge" and r[1].alpha == 1 and r[1].evil == nil and r[1].enabled == true, "defaults for bad values")
+    assert(r[1].auras[1].kind == "buff" and r[1].auras[1].unit == "target" and r[1].auras[1].pct == 50)
+    assert(select(2, NS.Share.Import("PT1:{}")):find("no rules"))
+    """
+
+@test("templates, duplicate and priority: the higher rule's look comes first")
+def _():
+    """
+    wipe(NS.db.rules)
+    local t = NS.NewRule("debuffMissing")
+    assert(t.combat and t.auras[1].kind == "debuff" and t.auras[1].unit == "target" and t.auras[1].mine and t.auras[1].dur == 0)
+    assert(#NS.NewRule().auras == 0 and NS.NewRule().id ~= NS.NewRule().id)
+    MOCK.Combat(true)
+    MOCK.usable, MOCK.control = MOCK.Secret("U"), MOCK.Secret("K")
+    local r1 = MOCK.Rule({ spell = "Lightning Bolt", control = false, color = "red" })
+    local i = NS.DuplicateRule(1)
+    local r2 = NS.db.rules[i]
+    assert(i == 2 and r2.id ~= r1.id and r2.color == "red")
+    r2.usable, r2.control, r2.color = false, true, "blue"
+    G.Update()
+    assert(ActionButton2.SG_Layers[1].styled == r1, "the higher rule is the first layer")
+    assert(NS.MoveRule(2, -1) == 1 and NS.db.rules[1] == r2)
+    G.Restyle()
+    assert(ActionButton2.SG_Layers[1].styled == r2, "moved up: now first")
+    assert(NS.MoveRule(1, -1) == 1, "already at the top")
+    """
+
+@test("no target: a target buff / debuff row doesn't hold, 'missing' included (before: glowed)")
+def _():
+    """
+    wipe(NS.db.rules)
+    MOCK.Rule({ spell = "Flame Shock", auras = { { name = "Flame Shock", unit = "target", kind = "debuff", mode = "missing", mine = true } } })
+    MOCK.target = nil
+    G.Update(); assert(MOCK.Glow("ActionButton3") == "", "nothing targeted: no glow")
+    local st, why = Eval(NS.db.rules[1]); assert(st == R.FALSE and why == "no target", tostring(why))
+    MOCK.target = "Creature-1"
+    G.Update(); assert(MOCK.Glow("ActionButton3") == "glow", "a target without it: glows")
+    """
+
+# ---------------------------------------------------------------------------------------------
 # Saved variables
 # ---------------------------------------------------------------------------------------------
 SAVED_OLD = '''

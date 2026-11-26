@@ -103,6 +103,23 @@ local IMODES = { { "present", "Active" }, { "missing", "Inactive" } }
 local RMODES = IMODES
 local MODES = IMODES
 
+local R = ns.Result
+-- a rule's result as one line (the editor's status, the list's tooltips)
+local function ResultLine(st, why, set)
+  if st == R.GATED then
+    local line = "|cffffd200Glowing when the game says so (hidden values)|r"
+    if set.partial then line = line .. " - partly: " .. (why or "?") .. "; it may not glow every time it should" end
+    return line
+  end
+  if st == R.TRUE then return "|cff60ff60Glowing|r" end
+  if st == R.UNKNOWN then return "|cffffd200Not glowing: can't tell|r - " .. (why or "?") end
+  if st == R.ERROR then return "|cffff6060Not glowing: error|r - " .. (why or "?") end
+  return "Not glowing: " .. (why or "?")
+end
+-- the list's status dots
+local STATUS_DOT = { [R.TRUE] = { 0.38, 1, 0.38 }, [R.GATED] = { 1, 0.82, 0 }, [R.UNKNOWN] = { 1, 0.55, 0.1 },
+  [R.ERROR] = { 1, 0.3, 0.3 } }
+
 local function BuildEditor(p)
   local e = { rows = {} }
 
@@ -358,18 +375,17 @@ local function BuildEditor(p)
     bx:SetFrameLevel(math.max(1, p:GetFrameLevel()))
     bx:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
     UI.Skin(function(th) bx:SetBackdropColor(UI.RGB(th.box, 0.10)); bx:SetBackdropBorderColor(UI.RGB(th.accent, 0.55)) end)
-    local function R() return Rule() end
     bx.title = UI.Text(bx, "value", "Group " .. g)
     bx.title:SetPoint("TOPLEFT", 10, -9)
     bx.mode = UI.Toggle(p, 210, { { "all", "All of these must hold" }, { "any", "Any one of these is enough" } },
-      { function() local r = R(); return r and r.groupModes and r.groupModes[g] or "all" end,
-        function(v) local r = R(); if r then r.groupModes = r.groupModes or {}; r.groupModes[g] = v end end },
+      { function() local r = Rule(); return r and r.groupModes and r.groupModes[g] or "all" end,
+        function(v) local r = Rule(); if r then r.groupModes = r.groupModes or {}; r.groupModes[g] = v end end },
       function() ui.Refresh(); Changed() end, "How the rows in this group combine. Click to switch.")
     bx.mode:SetPoint("LEFT", bx.title, "RIGHT", 10, 0)
     local name = ""
     bx.add = UI.Edit(p, 200, { function() return name end, function(v) name = v end }, "Add to this group: name or ID", true)
     bx.addBtn = UI.Button(p, "+ Add", 60, function()
-      local r = R(); if not r then return end
+      local r = Rule(); if not r then return end
       local c = ns.Copy(ns.NEW_AURA); c.name = strtrim(bx.add:GetText() or ""); c.group = g
       table.insert(r.auras, c)
       ns.NormalizeGroups(r)
@@ -380,7 +396,7 @@ local function BuildEditor(p)
     bx.add:SetScript("OnEnterPressed", function() bx.addBtn:Click() end)
     -- the AND / OR between this group and the one above (one setting for the whole rule)
     bx.join = UI.Toggle(p, 64, { { "and", "AND" }, { "or", "OR" } },
-      { function() local r = R(); return r and r.join or "and" end, function(v) local r = R(); if r then r.join = v end end },
+      { function() local r = Rule(); return r and r.join or "and" end, function(v) local r = Rule(); if r then r.join = v end end },
       function() ui.Refresh(); Changed() end, "How groups combine: AND = every group must hold, OR = any one group is enough.")
     bx.joinNote = UI.Text(p, "note", "")
     bx.joinNote:SetPoint("LEFT", bx.join, "RIGHT", 8, 0)
@@ -493,19 +509,6 @@ local function BuildEditor(p)
   -- live status: glowing or not and why, buttons, how each aura is read right now
   local HOW = { aura = "read directly", exact = "read directly", hidden = "seen (details hidden)",
     cdm = "from the Cooldown Manager", estimate = "estimate", unknown = "in combat" }
-  local R = ns.Result
-  -- a rule's result as one line
-  local function ResultLine(st, why, set)
-    if st == R.GATED then
-      local line = "|cffffd200Glowing when the game says so (hidden values)|r"
-      if set.partial then line = line .. " - partly: " .. (why or "?") .. "; it may not glow every time it should" end
-      return line
-    end
-    if st == R.TRUE then return "|cff60ff60Glowing|r" end
-    if st == R.UNKNOWN then return "|cffffd200Not glowing: can't tell|r - " .. (why or "?") end
-    if st == R.ERROR then return "|cffff6060Not glowing: error|r - " .. (why or "?") end
-    return "Not glowing: " .. (why or "?")
-  end
   e.UpdateStatus = function()
     local r = Rule()
     if not r then return end
@@ -516,7 +519,7 @@ local function BuildEditor(p)
     lines[#lines + 1] = ResultLine(ns.Glow.Evaluate(r))
     local nb = ns.Glow.CountButtons(r)
     lines[#lines + 1] = nb > 0 and format("On your action bars: %d button%s", nb, nb == 1 and "" or "s")
-      or "|cffff6060Not on any of Blizzard's action bars.|r"
+      or "|cffff6060Not on any shown action bar.|r"
     for _, a in ipairs(r.auras) do
       local an = ns.AuraName(r, a)
       if a.kind == "rule" then
@@ -575,19 +578,19 @@ local function BuildList(p)
   local l = {}
   local sec = UI.Section(p, "Rules", LIST_W); sec:SetPoint("TOPLEFT", 0, 0)
   l.box = CreateFrame("Frame", nil, p, "BackdropTemplate")
-  l.box:SetPoint("TOPLEFT", 0, -32); l.box:SetSize(LIST_W, 360)
+  l.box:SetPoint("TOPLEFT", 0, -32); l.box:SetSize(LIST_W, 280)
   l.box:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
   UI.Skin(function(th) l.box:SetBackdropColor(0, 0, 0, 0.35); l.box:SetBackdropBorderColor(UI.RGB(th.accent, 0.6)) end)
-  local scroll, content = UI.Scroll(l.box, LIST_W - 8, 352)
+  local scroll, content = UI.Scroll(l.box, LIST_W - 8, 272)
   scroll:SetPoint("TOPLEFT", 4, -4)
   l.content, l.scroll = content, scroll
 
-  l.add = UI.Button(p, "+ Add rule", 96, function()
-    local r = ns.Copy(ns.NEW_RULE); r.id = ns.NewRuleId()
+  local function Added(r)
     if ns.char then ns.char.fresh = nil end -- (you're making this character's rules yourself)
     table.insert(ns.db.rules, r)
     selected = #ns.db.rules; ui.Refresh(); Changed()
-  end)
+  end
+  l.add = UI.Button(p, "+ Add rule", 96, function() Added(ns.NewRule()) end)
   l.add:SetPoint("TOPLEFT", l.box, "BOTTOMLEFT", 0, -8)
   l.remove = UI.Button(p, "Remove", 96, function()
     if ns.db.rules[selected] then
@@ -596,6 +599,32 @@ local function BuildList(p)
     end
   end)
   l.remove:SetPoint("LEFT", l.add, "RIGHT", 4, 0)
+  -- a copy of this rule, and its place (priority: when several rules glow one spell, the higher one
+  -- wins: its look, and it's checked first)
+  l.dup = UI.Button(p, "Duplicate", 96, function()
+    local i = ns.DuplicateRule(selected)
+    if i then selected = i; ui.Refresh(); Changed() end
+  end)
+  l.dup.tip = "Add a copy of this rule right below it."
+  l.dup:SetPoint("TOPLEFT", l.add, "BOTTOMLEFT", 0, -4)
+  l.up = UI.Button(p, "Up", 46, function() selected = ns.MoveRule(selected, -1); ui.Refresh(); Changed() end)
+  l.up.tip = "Move this rule up. When several rules glow one spell, the higher one comes first (its look wins)."
+  l.up:SetPoint("LEFT", l.dup, "RIGHT", 4, 0)
+  l.down = UI.Button(p, "Down", 46, function() selected = ns.MoveRule(selected, 1); ui.Refresh(); Changed() end)
+  l.down.tip = l.up.tip:gsub("^Move this rule up", "Move this rule down")
+  l.down:SetPoint("LEFT", l.up, "RIGHT", 4, 0)
+  -- a new rule from a template
+  local tplOpts, tpl = {}, ns.TEMPLATES[1][1]
+  for _, t in ipairs(ns.TEMPLATES) do tplOpts[#tplOpts + 1] = { t[1], t[2] } end
+  l.tpl = UI.Toggle(p, 150, tplOpts, { function() return tpl end, function(v) tpl = v end }, nil,
+    "Start a rule from a pattern: click to step through them, then + to add it and type the spell.")
+  l.tpl:SetPoint("TOPLEFT", l.dup, "BOTTOMLEFT", 0, -4)
+  l.tplAdd = UI.Button(p, "+", 42, function() Added(ns.NewRule(tpl)) end)
+  l.tplAdd.tip = "Add a rule from this template."
+  l.tplAdd:SetPoint("LEFT", l.tpl, "RIGHT", 4, 0)
+  l.share = UI.Button(p, "Share rules...", LIST_W, function() ns.OpenShare() end)
+  l.share.tip = "Export rules as text to paste into another game, or import rules someone sent you."
+  l.share:SetPoint("TOPLEFT", l.tpl, "BOTTOMLEFT", 0, -4)
 
   l.Refresh = function()
     local th = UI.Theme()
@@ -608,10 +637,16 @@ local function BuildList(p)
         row.bar = row:CreateTexture(nil, "ARTWORK"); row.bar:SetWidth(2)
         row.bar:SetPoint("TOPLEFT"); row.bar:SetPoint("BOTTOMLEFT")
         row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(20, 20); row.icon:SetPoint("LEFT", 6, 0)
+        -- its live status: a dot (see l.RefreshStatus)
+        row.dot = row:CreateTexture(nil, "ARTWORK"); row.dot:SetSize(8, 8); row.dot:SetPoint("RIGHT", -6, 0)
+        row.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
         row.text = UI.Text(row, "line", "")
-        row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0); row.text:SetPoint("RIGHT", -4, 0); row.text:SetWordWrap(false)
-        row:SetScript("OnEnter", function(self) self.hover = true; l.Refresh() end)
-        row:SetScript("OnLeave", function(self) self.hover = false; l.Refresh() end)
+        row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0); row.text:SetPoint("RIGHT", row.dot, "LEFT", -4, 0); row.text:SetWordWrap(false)
+        row:SetScript("OnEnter", function(self)
+          self.hover = true; l.Refresh()
+          if self.why then GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(self.why, 1, 1, 1, 1, true); GameTooltip:Show() end
+        end)
+        row:SetScript("OnLeave", function(self) self.hover = false; l.Refresh(); GameTooltip:Hide() end)
         rows[i] = row
       end
       row:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
@@ -629,8 +664,27 @@ local function BuildList(p)
     end
     for i = #ns.db.rules + 1, #rows do rows[i]:Hide() end
     content:SetHeight(math.max(1, #ns.db.rules * 26))
-    l.remove.SetActive(ns.db.rules[selected] ~= nil)
+    local has = ns.db.rules[selected] ~= nil
+    l.remove.SetActive(has); l.dup.SetActive(has)
+    l.up.SetActive(selected > 1 and has); l.down.SetActive(selected < #ns.db.rules)
+    l.tpl.Refresh()
+    l.RefreshStatus()
     scroll.Update()
+  end
+  -- each rule's live status, as a dot: green glowing, yellow the game decides, orange can't tell,
+  -- red error, none when it doesn't hold (or is off); its line on hover
+  l.RefreshStatus = function()
+    ns.Glow.NewPass()
+    for i, r in ipairs(ns.db.rules) do
+      local row = rows[i]
+      if row then
+        local st, why, set = ns.Glow.Evaluate(r)
+        local c = STATUS_DOT[st]
+        row.dot:SetShown(r.enabled and c ~= nil)
+        if c then row.dot:SetVertexColor(c[1], c[2], c[3]) end
+        row.why = r.enabled and ResultLine(st, why, set) or "Off"
+      end
+    end
   end
   return l
 end
@@ -648,7 +702,7 @@ local function PageRules(pg)
   scroll:SetPoint("TOPLEFT", EDIT_X, 0)
   local editor = BuildEditor(content)
   ui = { Refresh = function() list.Refresh(); editor.Refresh(); editor.UpdateStatus(); scroll.Update() end,
-    Status = function() editor.UpdateStatus(); scroll.Update() end }
+    Status = function() editor.UpdateStatus(); list.RefreshStatus(); scroll.Update() end }
 end
 
 local function PageSettings(pg)
@@ -773,6 +827,49 @@ local function BuildWindow()
   local t = 0
   win:SetScript("OnUpdate", function(_, dt) t = t + dt; if t > 0.5 then t = 0; ui.Status() end end)
   win:Hide()
+end
+
+-- Share rules: export as text (this rule with the rules it uses, or all) or import text someone
+-- sent (Share.lua checks every field; nothing in it is run)
+local share
+function ns.OpenShare()
+  if not share then
+    share = UI.Popup("ProcThisShare", 580, 196)
+    local t = UI.Text(share, "title", "Share rules"); t:SetPoint("TOPLEFT", 20, -18)
+    local text = ""
+    local box = UI.Edit(share, 540, { function() return text end, function(v) text = v end }, "Paste rules text here to import")
+    box:SetMaxLetters(0)
+    box:SetPoint("TOPLEFT", 20, -52)
+    local msg = UI.Text(share, "note", ""); msg:SetPoint("TOPLEFT", 20, -82); msg:SetWidth(540)
+    local function Show(str)
+      text = str; box:SetText(str); box:SetFocus(); box:HighlightText()
+      msg:SetText("Copied into the box: press Ctrl+C to copy it, then paste it where you like.")
+    end
+    local one = UI.Button(share, "Export this rule", 140, function()
+      local r = ns.db.rules[selected]
+      if r then Show(ns.Share.Export(ns.db.rules, r)) end
+    end)
+    one.tip = "The rule selected in the list, with any rules it uses (its Rule rows)."
+    one:SetPoint("TOPLEFT", 20, -118)
+    local all = UI.Button(share, "Export all rules", 140, function() Show(ns.Share.Export(ns.db.rules)) end)
+    all:SetPoint("LEFT", one, "RIGHT", 8, 0)
+    local imp = UI.Button(share, "Import", 110, function()
+      local rules, err = ns.Share.Import(box:GetText())
+      if not rules then msg:SetText("|cffff6060Can't import: " .. err .. ".|r"); return end
+      local n = ns.AddRuleCopies(rules)
+      selected = #ns.db.rules - n + 1
+      msg:SetText(format("|cff60ff60Added %d rule%s|r to this character's list.", n, n == 1 and "" or "s"))
+      if ui then ui.Refresh() end
+      Changed()
+    end)
+    imp.tip = "Add the rules in the box to this character's list (nothing is replaced)."
+    imp:SetPoint("LEFT", all, "RIGHT", 8, 0)
+    local close = UI.Button(share, "Close", 90, function() share:Hide() end)
+    close:SetPoint("TOPRIGHT", -20, -118)
+    share.Reset = function() text = ""; box:SetText(""); msg:SetText("Export rules to share them, or paste rules text and Import.") end
+  end
+  share.Reset()
+  share:Show()
 end
 
 function ns.OpenOptions()

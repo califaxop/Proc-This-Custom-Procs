@@ -331,6 +331,49 @@ end
 -- Copies of rules (from another character, or the old shared list) added to this character's,
 -- each with a new id; "Rule X" rows point at the copies. keep(r): which to take (nil: all).
 -- Returns how many were added.
+-- Starting points for a new rule (1.20.0): a pattern, the spell left for you to fill in (a blank
+-- condition name means the rule's own spell). { key, label, fields }
+ns.TEMPLATES = {
+  { "buffMissing", "Your buff is missing", { auras = { { kind = "buff", unit = "player", mode = "missing" } } } },
+  { "debuffMissing", "Your debuff missing on target", { combat = true,
+    auras = { { kind = "debuff", unit = "target", mode = "missing", mine = true } } } },
+  { "execute", "Target below 20% health", { auras = { { kind = "health", unit = "target", op = "lt", pct = 20 } } } },
+  { "lowHealth", "You below 40% health", { auras = { { kind = "health", unit = "player", op = "lt", pct = 40 } } } },
+  { "instant", "Instant cast right now", { auras = { { kind = "instant", mode = "present" } } } },
+  { "proc", "The game flags it as a proc", { proc = true } },
+}
+-- a new rule from a template (with a new id), or a blank one
+function ns.NewRule(templateKey)
+  local r = Copy(ns.NEW_RULE)
+  r.id = ns.NewRuleId()
+  for _, t in ipairs(ns.TEMPLATES) do
+    if t[1] == templateKey then
+      for k, v in pairs(t[3]) do r[k] = Copy(v) end
+      for _, a in ipairs(r.auras) do for k, v in pairs(ns.NEW_AURA) do if a[k] == nil then a[k] = Copy(v) end end end
+    end
+  end
+  return r
+end
+
+-- a copy of rule i right after it (a new id; its Rule rows point where the original's do); its index
+function ns.DuplicateRule(i)
+  local r = ns.db.rules[i]
+  if not r then return nil end
+  local c = Copy(r); c.id = ns.NewRuleId()
+  table.insert(ns.db.rules, i + 1, c)
+  return i + 1
+end
+
+-- rule i one place up (by = -1) or down (1): earlier rules come first when several glow one spell;
+-- its new index
+function ns.MoveRule(i, by)
+  local rules = ns.db.rules
+  local j = i + by
+  if not rules[i] or not rules[j] then return i end
+  rules[i], rules[j] = rules[j], rules[i]
+  return j
+end
+
 function ns.AddRuleCopies(src, keep)
   if ns.char and keep == nil then ns.char.fresh = nil end -- (you chose this character's rules yourself)
   local map, added = {}, {}

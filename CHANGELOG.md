@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.20.0 (Milestone 5: user experience)
+
+- Each rule in the list shows its live status as a dot (green glowing, yellow the game decides,
+  orange can't tell, red error); hover it for why.
+- Move rules Up and Down: when several rules glow one spell, the higher one comes first (its look).
+- Duplicate a rule; start a rule from a template (buff missing, debuff missing on target, target
+  below 20%, you below 40%, instant cast, proc).
+- Share rules: export a rule (with the rules it uses) or all of them as text, and import rules
+  someone sent you. Imported text is checked field by field and never run.
+- Fixed: with no target, a "debuff missing on target" rule glowed.
+
 ## 1.19.0 (Milestone 4: button discovery and rendering)
 
 - Glows on action bars built on LibActionButton (Bartender4, ElvUI and others), besides Blizzard's

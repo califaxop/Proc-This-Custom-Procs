@@ -16,7 +16,8 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 - **Each rule its own look:** colour (Blizzard's gold, red, green, blue... or any colour you pick), how it starts, steady or pulsing, size and intensity. A "Use for all rules" button copies one rule's look to every rule.
 - **Extra checks:** being hit in melee, castable, off cooldown, not stunned, in combat, proc flagged.
 - **Your look:** just the glow, glow + shine, or Blizzard's burst; adjustable size and intensity.
-- **Live status:** each rule tells you why it is or isn't glowing.
+- **Live status:** each rule tells you why it is or isn't glowing, and the rules list shows each one's status at a glance.
+- **Organise and share:** move rules up and down (the higher one wins), duplicate them, start from templates, and share rules as text with other players.
 
 ## Quick start
 1. Type `/pt` and click **+ Add rule**.
@@ -47,6 +48,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
+- **1.20.0:** Every rule in the list shows a live status dot (hover for why). Move rules Up and Down (the higher one comes first when several glow one spell), Duplicate a rule, or start from a template. Share rules: export them as text and import rules someone sent you (checked field by field, never run). Fixed: with no target, a "debuff missing on target" rule glowed.
 - **1.19.0:** Glows on action bars built on LibActionButton (Bartender4, ElvUI and others) too. Fixed: a button whose bar was turned off could keep its glow. Lighter updates: only rules whose spell is on a shown button are worked out, a glow's look is set once when it starts, and out of combat the safety check runs once a second instead of four times. An item's glow follows the end of its cooldown at once. New command: `/pt perf`.
 - **1.18.0:** Fixed: a debuff cast through a mouseover or focus macro counted as on your target; switching targets mid-cast put the debuff on the new target; a buff cast on someone else counted as on you. How long buffs and debuffs last is now remembered across sessions (and read from the spell's tooltip until seen), so a buff cast in combat right after logging in is followed. Macros with [mod:shift] switch their glow at once. New commands: `/pt spell`, `/pt buttons`, `/pt api`.
 - **1.17.0:** Hidden conditions joined by OR now glow: an "any one" group or rules joined by OR glow when any of their conditions holds, even ones the game hides in combat (before: "can't tell", no glow). Several rules for one spell now all count, each in its own look, and never two glows at once; the rules list shows their place ("Lightning Bolt (#3)"), as Rule rows name them. More hidden conditions fit in one rule. A loop between rules names them, and the rule picker no longer offers a rule that would make one. Fixed: "Rule X is inactive" could glow when X was active through a branch that couldn't be told.
