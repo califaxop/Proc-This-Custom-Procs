@@ -317,7 +317,11 @@ Results (2.0.0 release candidate):
 - 2: failed: "Options.lua:847: bad argument #1 to 'SetText'". The Share window's fill function was
   stored as `share.Show`, which hid the frame's own `Show` method: opening the window called it with
   the window as the text. Renamed (`share.Fill`); a test now opens the real window (the earlier one
-  replaced `OpenShare`, so it couldn't catch this). To check again.
+  replaced `OpenShare`, so it couldn't catch this). Checked again: pass (the report shows in the box;
+  client 1.60.1 (71139), interface 16001, all game functions present, errors caught: none).
+- From that check: the report said to paste it into a bug report but didn't say where. The Share
+  window now has a "Bug report page" button with a report (the same link as Help's button,
+  `ns.OpenIssues`).
 
 ## Testing
 

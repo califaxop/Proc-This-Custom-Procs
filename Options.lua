@@ -796,7 +796,7 @@ local function PageHelp(page)
     "/pt debug  print each rule's status changes      /pt report  a report to paste into a bug report")
   sec("Feedback")
   local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
-    UI.ShowLink("ProcThisLinkWindow", "Proc This!: bugs and ideas", "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose")
+    ns.OpenIssues()
   end)
   fb:SetPoint("TOPLEFT", 0, y)
   local fbn = UI.Text(pg, "note", "Opens a link to copy: a short form for bugs or ideas.")
@@ -869,7 +869,15 @@ function ns.OpenShare(fill, note)
     imp:SetPoint("LEFT", all, "RIGHT", 8, 0)
     local close = UI.Button(share, "Close", 90, function() share:Hide() end)
     close:SetPoint("TOPRIGHT", -20, -118)
-    share.Reset = function() text = ""; box:SetText(""); msg:SetText("Export rules to share them, or paste rules text and Import.") end
+    -- with a /pt report: where to send it
+    local bug = UI.Button(share, "Bug report page", 140, function() ns.OpenIssues() end)
+    bug.tip = "The link to the bug report form, to open in your browser; paste the report into it."
+    bug:SetPoint("TOPLEFT", one, "BOTTOMLEFT", 0, -10)
+    share.bug = bug
+    share.Reset = function()
+      text = ""; box:SetText(""); bug:Hide()
+      msg:SetText("Export rules to share them, or paste rules text and Import.")
+    end
   end
   share.Reset()
   share:Show()
@@ -1023,7 +1031,8 @@ SlashCmdList.PROCTHIS = function(msg)
   if (msg or ""):lower():match("^report") then
     local ok, text = pcall(Report)
     if not ok then ns.Print("report failed: " .. tostring(text)); return end
-    ns.OpenShare(text, "Your report is in the box: press Ctrl+C and paste it into your bug report.")
+    ns.OpenShare(text, "Your report is in the box: press Ctrl+C to copy it. \"Bug report page\" gives the link to the form: open it in your browser and paste the report there.")
+    share.bug:Show()
     return
   end
   if (msg or ""):lower():match("^perf") then for _, l in ipairs(ns.Glow.PerfReport()) do ns.Print(l) end return end

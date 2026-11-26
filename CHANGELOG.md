@@ -7,7 +7,7 @@ milestones (not published); 2.0.0 is all of them, plus Milestone 6:
 
 - New: `/pt report` puts everything a bug report needs into one text to copy: version and client,
   what the game lets Proc This! see right now, the buttons, each rule's status, the last errors
-  caught, and your rules.
+  caught, and your rules; its "Bug report page" button gives the link to the bug report form.
 - New: `/pt debug` prints each rule's status changes as they happen.
 - Errors while working out a rule are kept (for `/pt report`) besides showing as "error".
 

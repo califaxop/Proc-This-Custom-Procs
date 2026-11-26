@@ -6,6 +6,9 @@ ns.isSecret = issecretvalue or function() return false end
 ns.canAccess = canaccessvalue or function(v) return not ns.isSecret(v) end
 function ns.Readable(v) return v ~= nil and not ns.isSecret(v) end
 function ns.Print(...) print("|cffffd200Proc This!:|r", ...) end
+-- where bugs and ideas go (Help's button, /pt report's)
+ns.ISSUES_URL = "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose"
+function ns.OpenIssues() ns.UI.ShowLink("ProcThisLinkWindow", "Proc This!: bugs and ideas", ns.ISSUES_URL) end
 
 -- A rule: glow `spell` (every rank, matched by name) while ALL of its checked conditions hold.
 --   auras       list of aura conditions, all must hold:

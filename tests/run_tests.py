@@ -761,7 +761,8 @@ def _():
     local win = _G.ProcThisShare
     assert(win and win._shown, "the window is shown")
     assert(win.box._text:find("rule 1 Lightning Bolt", 1, true), tostring(win.box._text))
-    win:Hide(); NS.OpenShare(); assert(win._shown and win.box._text == "", "opened again: empty")
+    assert(win.bug._shown, "with a report: the bug report page button")
+    win:Hide(); NS.OpenShare(); assert(win._shown and win.box._text == "" and not win.bug._shown, "opened again: empty, no bug button")
     """
 
 # ---------------------------------------------------------------------------------------------
