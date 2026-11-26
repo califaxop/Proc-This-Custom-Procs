@@ -12,8 +12,8 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 |---|---|---|
 | 1 | Condition engine reliability | Done in 1.16.0, verified in game, reviewed |
 | 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | Done in 1.17.0, verified in game, reviewed |
-| 3 | Spell, item and aura tracking (compatibility layer, macros) | **Done in 1.18.0, verified in game, waiting for review** |
-| 4 | Button discovery and rendering (providers, lifecycle, profiling) | Not started |
+| 3 | Spell, item and aura tracking (compatibility layer, macros) | Done in 1.18.0, verified in game, reviewed |
+| 4 | Button discovery and rendering (providers, lifecycle, profiling) | **Done in 1.19.0, waiting for in-game validation and review** |
 | 5 | User experience (live status, priority, templates, import / export) | Not started |
 | 6 | Diagnostics and release readiness | Not started |
 
@@ -33,7 +33,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 
 ## Architecture (1.17.0)
 
-Load order (ProcThis.toc): Core → Compat → Result → State → Glow → UI → Options.
+Load order (ProcThis.toc): Core → Compat → Result → State → Buttons → Glow → UI → Options.
 
 | File | Module | Does |
 |---|---|---|
@@ -41,7 +41,8 @@ Load order (ProcThis.toc): Core → Compat → Result → State → Glow → UI 
 | Compat.lua | `ns.API` | The compatibility layer (1.18.0): every game function used to read conditions and buttons, by name, with the forms it may take (newer `C_` namespaces, older globals); `API.Call` (safe: answered / failed / not on this client), `API.Has`, `/pt api` |
 | Result.lua | `ns.Result` | The result model: TRUE / FALSE / GATED / UNKNOWN / ERROR, and how they combine (AND, OR, NOT). Pure Lua |
 | State.lua | `ns.State` | Every condition reader: buffs (direct, Cooldown Manager, estimates), target debuffs (direct, Cooldown Manager, estimates from your casts per target), health / mana / combo points / rage / energy (readable, or step curves for hidden values), cast time, melee, castable, cooldown, control, combat, proc flag |
-| Glow.lua | `ns.Glow` | Button discovery (Blizzard bars, EllesmereUI's `EABButton`s), what each button holds (spell, item, macro), the evaluator (rows → groups → rule), the update loop and events, the glow frames (Blizzard's alert template, gates, styles, EllesmereUI glows) |
+| Buttons.lua | `ns.Buttons` | Button providers (1.19.0): Blizzard's bars, EllesmereUI's `EABButton`s (and their shapes), LibActionButton-1.0 bars (Bartender4, ElvUI...); the list (built again on a UI loading, entering the world, a restyle, or every 5 s while a provider whose buttons come and go is present), buttons that dropped out, each button's action slot |
+| Glow.lua | `ns.Glow` | What each button holds (spell, item, macro), the evaluator (rows → groups → rule), the update loop and events, the glow frames (Blizzard's alert template, gates, styles, EllesmereUI glows) |
 | UI.lua | `ns.UI` | The shared settings-window kit (and EllesmereUI / FlareUI looks) |
 | Options.lua | — | The settings window (rules list, editor, look, settings, help), live status per rule, start-up, slash commands |
 
@@ -166,8 +167,8 @@ Severity: High = wrong glow in normal play; Medium = wrong in some situations; L
 | R4 | Several rules for one spell: only the first GATED rule's gates are used, so a later GATED rule that holds doesn't glow (never a wrong glow). | Fixed in 1.17.0 (each GATED rule's terms are a layer) |
 | R5 | Estimates can be wrong (see "Aura sources"): a cast that missed, a buff ended early. They're labelled, not hidden. | 1.18.0: casts at other units and target switches mid-cast fixed (defects 12-14); a miss or resist still can't be seen (no event says which spell missed) |
 | R6 | Macros: the spell or item is read every update (`GetActionInfo` subtype, `GetMacroSpell`, `GetMacroItem`); conditional macros follow what the game reports for the current conditions. Not verified for every macro form. | 1.18.0: modifier changes update at once; `/pt buttons` shows what each macro reads as, to check forms in game |
-| R7 | Buttons: a fixed list of Blizzard bars plus EllesmereUI's `EABButton1..180` (rebuilt every 5 s while EllesmereUI is on). No provider interface yet. | M4 |
-| R8 | Every rule is evaluated on every update (events merged to 0.05 s, plus a 0.25 s tick for the melee window and Cooldown Manager changes, which have no events). Not profiled yet. | M4 |
+| R7 | Buttons: a fixed list of Blizzard bars plus EllesmereUI's `EABButton1..180` (rebuilt every 5 s while EllesmereUI is on). No provider interface yet. | 1.19.0: providers (Blizzard, EllesmereUI, LibActionButton); other bar addons need a provider |
+| R8 | Every rule is evaluated on every update (events merged to 0.05 s, plus a 0.25 s tick for the melee window and Cooldown Manager changes, which have no events). Not profiled yet. | 1.19.0: only rules whose spell is on a shown button; looks set once; `/pt perf` measures it |
 | R9 | A target debuff row on "missing" with no target reads "absent" (true): the rule can glow with no target if its spell is castable. Unchanged behaviour. | M5 (review) |
 | R10 | During the global cooldown, a hidden cooldown flag (finding 3) reads "on cooldown": the gated glow may dip for the GCD. Safer than glowing while on cooldown. | Check in game |
 
@@ -222,6 +223,27 @@ Where a cast went (`State.OnSent`), from `UNIT_SPELLCAST_SENT`'s target name:
 Two units with the same name can't be told apart (a mouseover cast on a second "Southern Sand
 Crawler" counts as on your target).
 
+## Milestone 4 (1.19.0)
+
+Audit of the 1.18.0 button and rendering code:
+
+| # | Sev. | Defect | Fix |
+|---|---|---|---|
+| 19 | Medium | Only Blizzard's and EllesmereUI's buttons were known, as a fixed list in Glow.lua: no glows on bars built on LibActionButton-1.0 (Bartender4, ElvUI). | Button providers (Buttons.lua), LibActionButton through its `buttonRegistry` |
+| 20 | Low | A button that dropped out of the list (a bar turned off) kept its glow. | Dropped buttons are handed back with the list, and their glows taken off |
+| 21 | Low | Every rule was worked out on every update, also rules whose spell was on no shown button. | Only rules for spells on shown buttons (rules they use are worked out through them) |
+| 22 | Low | Every glowing button was set up again on every update: colour (three textures on three frames), pulse, the EllesmereUI shape key (a new string each time). | Set up when a layer starts, and again only after a restyle, a new button list or a size change; the gates still follow every update |
+| 23 | Low | No measure of what updates cost. | `/pt perf` (`debugprofilestop`) |
+
+Changes:
+- `Buttons.lua` (new): providers `{ name, Present, Collect(add), dynamic, Shape }`, `List()` (the
+  buttons, and the ones that dropped out), `Action(b)` (also LibActionButton's `_state_action`),
+  `Shape(b)`, `Rescan()`, `Report()`.
+- `Glow.lua`: uses `ns.Buttons`; layers keep their look (`styled`, `styleGen`); `Update` skips rules
+  not on shown buttons and counts its cost; `ADDON_LOADED` / `PLAYER_ENTERING_WORLD` rescan the
+  buttons; `/pt buttons` starts with each provider's count.
+- `Options.lua`: `/pt perf`.
+
 ## Testing
 
 ### Offline
@@ -231,7 +253,8 @@ pip install lupa
 python3 tests/run_tests.py
 ```
 
-33 tests (1.18.0): the compatibility layer (missing functions, older forms, errors), durations
+36 tests (1.19.0): button providers (LibActionButton, dropped buttons), rules skipped when not on
+a shown button, looks set once; the compatibility layer (missing functions, older forms, errors), durations
 (kept across sessions, from tooltips), where casts went (mouseover / focus, target switch
 mid-cast, buffs on others), macros (`/pt buttons`, modifier updates); the result model (AND / OR / NOT on gate sets, partial sets, limits, and the
 random-formula check against every truth assignment), buff estimates and unknowns (charged buffs),
@@ -336,6 +359,17 @@ Results (1.18.0 test build, Shaman):
 - 6 (`[mod:shift] Earth Shock; Lightning Bolt` macro): pass, the glow follows the modifier.
 
 Milestone 3 verified in game; awaiting review before Milestone 4.
+
+### In-game checklist (Milestone 4 → 5)
+
+1. Install 1.19.0, `/reload`. Glows as in 1.18.0 (Blizzard bars and EllesmereUI's, shapes
+   included); no Lua errors.
+2. `/pt buttons`: the first line counts each provider's buttons (Blizzard, EllesmereUI,
+   LibActionButton "not loaded" unless Bartender4 / ElvUI is installed).
+3. `/pt perf` once, play a fight with your rules (a minute or two), then `/pt perf` again: send the
+   two lines (updates a second, ms each, rules worked out / skipped, buttons).
+4. Change a rule's colour, size and "while it's on" in combat and out: the glow follows at once.
+5. Turn an EllesmereUI bar off and on (if you use one): no glow left behind on the hidden bar.
 
 ## Known limitations
 

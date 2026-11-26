@@ -5,7 +5,7 @@
 Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow on it the moment they're met. No more watching buff bars mid-fight.
 
 ## Highlights
-- **Any spell, any rank, or an item:** on Blizzard, FlareUI and EllesmereUI bars, macros included. Trinkets, potions and other usable items glow too.
+- **Any spell, any rank, or an item:** on Blizzard, EllesmereUI and LibActionButton bars (Bartender4, ElvUI...), macros included. Trinkets, potions and other usable items glow too.
 - **Fits your UI:** EllesmereUI or FlareUI found by themselves, and the settings window takes on their look. With EllesmereUI, the glow follows its shaped buttons and you can pick its glow styles (autocast shine, pixel lines, GCD ants...).
 - **Buffs & debuffs:** on you or your target, active or missing, as many as you like.
 - **Groups with AND / OR:** e.g. *(Buff X or Buff Y) and (Debuff Z and Debuff W)*.
@@ -32,6 +32,7 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 | `/pt spell <spell>` (or `/pt cast`) | A spell's cast time right now, how long its buff or debuff lasts, and whether it has charges |
 | `/pt buttons` | What each macro button (and each button with a rule's spell) reads as right now |
 | `/pt power` | What the game lets Proc This! read of your mana, combo points, rage and energy |
+| `/pt perf` | How long glow updates take (since the last `/pt perf`) |
 | `/pt api` | Which game functions this client has (for bug reports) |
 
 ## Good to know
@@ -46,6 +47,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
+- **1.19.0:** Glows on action bars built on LibActionButton (Bartender4, ElvUI and others) too. Fixed: a button whose bar was turned off could keep its glow. Lighter updates: only rules whose spell is on a shown button are worked out, and a glow's look is set once when it starts. New command: `/pt perf`.
 - **1.18.0:** Fixed: a debuff cast through a mouseover or focus macro counted as on your target; switching targets mid-cast put the debuff on the new target; a buff cast on someone else counted as on you. How long buffs and debuffs last is now remembered across sessions (and read from the spell's tooltip until seen), so a buff cast in combat right after logging in is followed. Macros with [mod:shift] switch their glow at once. New commands: `/pt spell`, `/pt buttons`, `/pt api`.
 - **1.17.0:** Hidden conditions joined by OR now glow: an "any one" group or rules joined by OR glow when any of their conditions holds, even ones the game hides in combat (before: "can't tell", no glow). Several rules for one spell now all count, each in its own look, and never two glows at once; the rules list shows their place ("Lightning Bolt (#3)"), as Rule rows name them. More hidden conditions fit in one rule. A loop between rules names them, and the rule picker no longer offers a rule that would make one. Fixed: "Rule X is inactive" could glow when X was active through a branch that couldn't be told.
 - **1.16.0:** More reliable conditions. Each one now answers yes, no, "the game decides" or "can't tell", and "can't tell" never lights a glow. Fixed: a buff not tracked in the Cooldown Manager counted as missing in combat when it had never been seen; casting a spell kept its buff "on" until combat ended; a cooldown the game hides counted as ready; your debuffs on a target were forgotten when you switched targets and back. The rule status in the settings now says where each answer comes from (read, Cooldown Manager or an estimate from your casts) and "can't tell" apart from a plain no.

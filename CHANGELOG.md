@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.19.0 (Milestone 4: button discovery and rendering)
+
+- Glows on action bars built on LibActionButton (Bartender4, ElvUI and others), besides Blizzard's
+  and EllesmereUI's.
+- Fixed: a button whose bar was turned off could keep its glow.
+- Lighter updates: only rules whose spell is on a shown button are worked out, and a glow's look is
+  set when it starts instead of on every update.
+- New: `/pt perf` shows how long glow updates take; `/pt buttons` starts with how many buttons each
+  kind of bar has.
+
 ## 1.18.0 (Milestone 3: spell, item and aura tracking)
 
 - Fixed: a debuff cast at another unit (a mouseover or focus macro) counted as on your target.

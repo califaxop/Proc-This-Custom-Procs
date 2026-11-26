@@ -738,7 +738,7 @@ local function PageHelp(page)
   para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
     "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      " ..
     "/pt spell <spell>  its cast time, how long it lasts, charges      /pt buttons  what each macro button reads as now      " ..
-    "/pt power  what's readable of your power      /pt api  which game functions this client has")
+    "/pt power  what's readable of your power      /pt perf  how long glow updates take      /pt api  which game functions this client has")
   sec("Feedback")
   local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
     UI.ShowLink("ProcThisLinkWindow", "Proc This!: bugs and ideas", "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose")
@@ -882,6 +882,7 @@ SlashCmdList.PROCTHIS = function(msg)
   if spellArg then ShowSpell(spellArg); return end
   if (msg or ""):lower():match("^api") then for _, l in ipairs(ns.API.Report()) do ns.Print(l) end return end
   if (msg or ""):lower():match("^button") then for _, l in ipairs(ns.Glow.ButtonReport()) do ns.Print(l) end return end
+  if (msg or ""):lower():match("^perf") then for _, l in ipairs(ns.Glow.PerfReport()) do ns.Print(l) end return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
   if (msg or ""):lower():match("^power") then

@@ -45,6 +45,7 @@ MOCK.methods = {
   GetParent = function(s) return s._parent end, IsForbidden = function() return false end,
   EnumerateActive = function(s) local i = 0 return function() i = i + 1 return (s._items or {})[i] end end,
   GetChildren = function() end, GetRegions = function() end,
+  SetVertexColor = function() MOCK.tints = (MOCK.tints or 0) + 1 end,
 }
 CreateFrame = function(kind, name, parent, template)
   local o = obj(name)

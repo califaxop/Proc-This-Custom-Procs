@@ -572,6 +572,61 @@ def _():
     """
 
 # ---------------------------------------------------------------------------------------------
+# Milestone 4: button providers, rendering, performance
+# ---------------------------------------------------------------------------------------------
+@test("buttons: a LibActionButton bar glows; a button that drops out of the list loses its glow")
+def _():
+    """
+    -- a LibActionButton-1.0 bar (Bartender4, ElvUI): its button for action slot 2 (Lightning Bolt)
+    LABBTN = MOCK.obj("BT4Button2"); LABBTN._state_type = "action"; LABBTN._state_action = 2
+    LAB = { buttonRegistry = { [LABBTN] = true } }
+    LibStub = { GetLibrary = function(_, name) if name == "LibActionButton-1.0" then return LAB end end }
+    NS.Buttons.Rescan()
+    wipe(NS.db.rules)
+    MOCK.Rule({ spell = "Lightning Bolt" })
+    G.Update()
+    assert(MOCK.Glow("BT4Button2") == "glow", "LibActionButton's button glows")
+    assert(MOCK.Glow("ActionButton2") == "glow", "and Blizzard's")
+    local report = G.ButtonReport()[1]
+    assert(report:find("Blizzard 5", 1, true) and report:find("LibActionButton 1", 1, true) and report:find("EllesmereUI not loaded", 1, true), report)
+    LAB.buttonRegistry[LABBTN] = nil
+    MOCK.now = MOCK.now + 6; G.Update()
+    assert(MOCK.Glow("BT4Button2") == "", "dropped: glow off")
+    """
+
+@test("performance: rules whose spell isn't on a shown button aren't worked out")
+def _():
+    """
+    wipe(NS.db.rules)
+    MOCK.Rule({ spell = "Purge" })                            -- not on any bar
+    MOCK.Rule({ spell = "Lightning Bolt" })
+    local calls, real = {}, C_Spell.IsSpellUsable
+    C_Spell.IsSpellUsable = function(n) calls[n] = (calls[n] or 0) + 1 return real(n) end
+    G.PerfReport()
+    G.Update()
+    assert(not calls["Purge"] and calls["Lightning Bolt"] == 1, "Purge read " .. tostring(calls["Purge"]))
+    ActionButton2._shown = false; G.Update()                  -- its button hidden (a bar page, a hidden bar)
+    assert(calls["Lightning Bolt"] == 1, "not read while its button is hidden")
+    ActionButton2._shown = true
+    local lines = G.PerfReport()
+    assert(lines[1]:find("^2 updates") and lines[2]:find("0.5 rules worked out, 1.5 skipped", 1, true), lines[1] .. " / " .. lines[2])
+    C_Spell.IsSpellUsable = real
+    """
+
+@test("rendering: a glowing button's look is set once, not on every update; a restyle sets it again")
+def _():
+    """
+    wipe(NS.db.rules)
+    MOCK.Rule({ spell = "Lightning Bolt", color = "custom", colorCustom = { 0, 1, 1 } })
+    G.Update(); local after1 = MOCK.tints or 0
+    assert(after1 > 0, "tinted when it starts")
+    G.Update(); G.Update()
+    assert((MOCK.tints or 0) == after1, "not again while it glows")
+    G.Restyle()
+    assert((MOCK.tints or 0) > after1, "a restyle sets the look again")
+    """
+
+# ---------------------------------------------------------------------------------------------
 # Saved variables
 # ---------------------------------------------------------------------------------------------
 SAVED_OLD = '''

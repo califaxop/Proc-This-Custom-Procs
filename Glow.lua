@@ -8,67 +8,14 @@ local S = ns.State
 local isSecret = ns.isSecret
 local API = ns.API
 
-local BAR_PREFIXES = {
-  "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarRightButton",
-  "MultiBarLeftButton", "MultiBar5Button", "MultiBar6Button", "MultiBar7Button",
-}
-
--- EllesmereUI's action bars: its own buttons, EABButton<action slot>, for bars 1-10
--- (its EUI_ActionBars_Secure.lua: BAR_SLOT_OFFSETS). They're made when a bar is turned on, so the
--- list is looked at again every few seconds while EllesmereUI is loaded.
-local EAB_SLOTS = 180
-local EAB_BARS = { -- first slot -> its bar's settings key
-  { 1, "MainBar" }, { 13, "Bar9" }, { 25, "Bar4" }, { 37, "Bar5" }, { 49, "Bar3" }, { 61, "Bar2" },
-  { 109, "Bar10" }, { 145, "Bar6" }, { 157, "Bar7" }, { 169, "Bar8" },
-}
-local function HasEllesmere() return ns.HasEllesmere() end
-
-local buttons, builtAt
-local function Buttons()
-  if buttons and not (HasEllesmere() and GetTime() - builtAt > 5) then return buttons end
-  buttons, builtAt = {}, GetTime()
-  for _, prefix in ipairs(BAR_PREFIXES) do
-    for i = 1, 12 do
-      local b = _G[prefix .. i]
-      if b then buttons[#buttons + 1] = b end
-    end
-  end
-  if HasEllesmere() then
-    for slot = 1, EAB_SLOTS do
-      local b = _G["EABButton" .. slot]
-      if b then buttons[#buttons + 1] = b end
-    end
-  end
-  return buttons
-end
-
--- EllesmereUI can shape its buttons (circle, hexagon, diamond...): a square glow would stick out, so
--- there Proc This! draws EllesmereUI's own shape glow (its public EllesmereUI.Glows), in the rule's
--- colour. Returns the shape's mask and border textures, or nil (a square button: our usual glow).
-local function EllesmereShape(b)
-  if not (HasEllesmere() and EllesmereUI.Glows.StartShapeGlow and EllesmereUI.SHAPE_MASKS) then return nil end
-  local slot = tonumber((b:GetName() or ""):match("^EABButton(%d+)$"))
-  if not slot then return nil end
-  local key
-  for _, e in ipairs(EAB_BARS) do if slot >= e[1] and slot < e[1] + 12 then key = e[2] end end
-  local ok, eab = pcall(function() return EllesmereUI.Lite and EllesmereUI.Lite.GetAddon("EllesmereUIActionBars", true) end)
-  local bars = ok and eab and eab.db and eab.db.profile and eab.db.profile.bars
-  local shape = key and type(bars) == "table" and type(bars[key]) == "table" and bars[key].buttonShape
-  if not shape or shape == "none" or shape == "cropped" then return nil end
-  local mask = EllesmereUI.SHAPE_MASKS[shape]
-  if not mask then return nil end
-  return mask, EllesmereUI.SHAPE_BORDERS and EllesmereUI.SHAPE_BORDERS[shape]
-end
+local BT = ns.Buttons
+-- the buttons (Buttons.lua); a button that dropped out of the list loses its glow
+local Buttons
 
 -- The spell (or item) name on a button: spells, items, and macros that cast a spell or use an item.
 local slotCache = {}
-local function ButtonAction(b)
-  local action = b.action or (b.CalculateAction and b:CalculateAction()) or (b.GetAttribute and b:GetAttribute("action"))
-  if not action or isSecret(action) then return nil end
-  return action
-end
 local function ButtonSpell(b)
-  local action = ButtonAction(b)
+  local action = BT.Action(b)
   if not action then return nil end
   local cached = slotCache[action]
   if cached ~= nil then return cached or nil end
@@ -106,7 +53,7 @@ function G.ButtonReport()
   local ruled, lines = {}, {}
   for _, r in ipairs(ns.db.rules) do local n = ns.RuleSpellName(r); if n then ruled[n] = true end end
   for _, b in ipairs(Buttons()) do
-    local action = b:IsVisible() and ButtonAction(b)
+    local action = b:IsVisible() and BT.Action(b)
     if action then
       local ok, kind = API.Call("ActionInfo", action)
       kind = ok and not isSecret(kind) and kind or nil
@@ -119,6 +66,7 @@ function G.ButtonReport()
     end
   end
   if #lines == 0 then lines[1] = "no shown buttons with a macro or a rule's spell." end
+  table.insert(lines, 1, BT.Report())
   return lines
 end
 
@@ -297,6 +245,7 @@ local function StopShape(L)
 end
 
 local function HideLayer(L)
+  L.styled = nil
   local glow = L.glow
   StopShine(L); StopBurst(L); StopShape(L)
   if not glow or not glow:IsShown() then return end
@@ -307,6 +256,19 @@ end
 -- every layer on a button, from layer `from` on (default: all)
 local function Hide(b, from)
   for i, L in ipairs(b.SG_Layers or {}) do if i >= (from or 1) then HideLayer(L) end end
+end
+
+-- the look is set up when a layer starts, and again only after a restyle, a new button list or a
+-- size change: not on every update (only the gates change then)
+local styleGen = 0
+
+Buttons = function()
+  local list, gone = BT.List()
+  if gone then
+    styleGen = styleGen + 1 -- (EllesmereUI shapes are looked at again with the list)
+    for _, b in ipairs(gone) do Hide(b) end
+  end
+  return list
 end
 
 -- start the glow in the chosen style:
@@ -366,12 +328,15 @@ local function ShowLayer(L, gates, rule)
       g:SetAlpha(1)
     end
   end
+  local w, h = b:GetSize()
+  if L.styled == rule and L.styledGen == styleGen and L.sw == w and L.sh == h and (glow:IsShown() or L.shapeOn) then return end
+  L.styled, L.styledGen, L.sw, L.sh = rule, styleGen, w, h
   glow:SetAlpha(alpha)
   -- colour (and the shine's, so its flare matches)
   local r, gg, bb = ns.RuleGlowRGB(rule)
   -- with EllesmereUI: on its shaped buttons, its shape glow; elsewhere, the rule's EllesmereUI glow style
   -- if it has one. Both drawn inside the same gates, so the conditions work the same.
-  local mask, border = EllesmereShape(b)
+  local mask, border = BT.Shape(b)
   local euiIdx = (not mask) and ns.EUIStyleIndex(rule) or nil
   if mask or euiIdx then
     if glow:IsShown() then glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop(); glow:Hide() end
@@ -385,7 +350,6 @@ local function ShowLayer(L, gates, rule)
     end
     L.lead:SetAlpha(1)
     L.shapeHost:SetAlpha(alpha)
-    local w, h = b:GetSize()
     local key = table.concat({ mask or "", euiIdx or 0, tostring(r), tostring(gg), tostring(bb), w or 0, h or 0 }, "|")
     if L.shapeOn ~= key then
       local E = EllesmereUI.Glows
@@ -430,7 +394,8 @@ end
 -- style or size changed: restart every glow so the change shows
 function G.Restyle()
   for _, b in ipairs(Buttons()) do Hide(b) end
-  buttons = nil -- (look again: EllesmereUI adds or drops its buttons)
+  BT.Rescan() -- (look again: EllesmereUI adds or drops its buttons)
+  styleGen = styleGen + 1
   G.Update()
 end
 
@@ -665,49 +630,85 @@ function G.Test(seconds)
 end
 
 -- per spell: "plain" (glow) with its rule, or the gate-set terms of its GATED rules, in rule order
-local plain, terms, lastUpdate, idle = {}, {}, 0, false
+local plain, terms, onBars, shown, lastUpdate, idle = {}, {}, {}, {}, 0, false
+
+-- /pt perf: how long updates take (debugprofilestop: ms, precise), how many, and how much each did
+local perf = { n = 0, ms = 0, max = 0, rules = 0, skipped = 0, buttons = 0, glowing = 0, since = 0 }
+local clock = function() return debugprofilestop and debugprofilestop() or GetTime() * 1000 end
+
 function G.Update()
+  local t0 = clock()
   lastUpdate = GetTime()
   G.NewPass()
+  local list = Buttons()
   -- no rules: hide whatever still glows once, then there's nothing to do
   if #ns.db.rules == 0 then
-    if not idle then for _, b in ipairs(Buttons()) do Hide(b) end; idle = true end
+    if not idle then for _, b in ipairs(list) do Hide(b) end; idle = true end
     return
   end
   idle = false
-  wipe(plain); wipe(terms)
+  -- what the shown buttons hold: only rules for those spells are worked out (a rule another rule
+  -- uses is worked out when that one is)
+  wipe(plain); wipe(terms); wipe(onBars); wipe(shown)
+  for _, b in ipairs(list) do
+    local name = b:IsVisible() and ButtonSpell(b)
+    if name then shown[b] = name; onBars[name] = true end
+  end
   local testing = GetTime() < testUntil
+  local nRules, nSkipped = 0, 0
   for _, rule in ipairs(ns.db.rules) do
     local name = ns.RuleSpellName(rule)
-    if name and not plain[name] then
+    if name and not onBars[name] then nSkipped = nSkipped + 1
+    elseif name and not plain[name] then
       if testing then
         if rule.enabled then plain[name] = { { rule = rule } } end
       else
+        nRules = nRules + 1
         local st, _, set = G.Evaluate(rule)
         -- several rules for one spell: a plain yes wins (the first one's look); else every GATED
         -- rule's terms, in order (the game opens whichever holds); FALSE, UNKNOWN, ERROR never glow
         if st == R.TRUE then plain[name] = { { rule = rule } }
         elseif st == R.GATED then
-          local list = terms[name] or {}
-          terms[name] = list
+          local tl = terms[name] or {}
+          terms[name] = tl
           for _, t in ipairs(set) do
             local c = { rule = rule }
             for i, g in ipairs(t) do c[i] = g end
-            list[#list + 1] = c
+            tl[#tl + 1] = c
           end
         end
       end
     end
   end
   -- the GATED terms of each spell made exclusive: one layer each
-  for name, list in pairs(terms) do
-    if not plain[name] then terms[name] = (R.Disjoint(list, InvertGate, MAX_LAYERS)) end
+  for name, tl in pairs(terms) do
+    if not plain[name] then terms[name] = (R.Disjoint(tl, InvertGate, MAX_LAYERS)) end
   end
-  for _, b in ipairs(Buttons()) do
-    local name = b:IsVisible() and ButtonSpell(b)
+  local nGlow = 0
+  for _, b in ipairs(list) do
+    local name = shown[b]
     local layers = name and (plain[name] or terms[name])
-    if layers and #layers > 0 then Show(b, layers) else Hide(b) end
+    if layers and #layers > 0 then Show(b, layers); nGlow = nGlow + 1 else Hide(b) end
   end
+  local ms = clock() - t0
+  perf.n, perf.ms, perf.max = perf.n + 1, perf.ms + ms, math.max(perf.max, ms)
+  perf.rules, perf.skipped = perf.rules + nRules, perf.skipped + nSkipped
+  perf.buttons, perf.glowing = perf.buttons + #list, perf.glowing + nGlow
+end
+
+-- /pt perf: since the last /pt perf (or login); then starts counting again
+function G.PerfReport()
+  local now = GetTime()
+  local secs = math.max(0.001, now - perf.since)
+  local n = math.max(1, perf.n)
+  local lines = {
+    format("%d updates in %.0f s (%.1f a second); %.3f ms each on average, %.3f ms at most",
+      perf.n, secs, perf.n / secs, perf.ms / n, perf.max),
+    format("each update: %.1f rules worked out, %.1f skipped (spell not on a shown button); %.0f buttons, %.1f glowing",
+      perf.rules / n, perf.skipped / n, perf.buttons / n, perf.glowing / n),
+  }
+  perf.n, perf.ms, perf.max, perf.rules, perf.skipped, perf.buttons, perf.glowing, perf.since = 0, 0, 0, 0, 0, 0, 0, now
+  return lines
 end
 
 -- buttons showing a rule's spell (for the settings window)
@@ -733,13 +734,14 @@ end
 G.Soon = Soon
 
 function G.Init()
+  perf.since = GetTime()
   local ev = CreateFrame("Frame")
   for _, e in ipairs({ "SPELL_UPDATE_USABLE", "SPELL_UPDATE_COOLDOWN", "PLAYER_REGEN_ENABLED",
     "PLAYER_REGEN_DISABLED", "ACTIONBAR_SLOT_CHANGED", "UPDATE_MACROS", "ACTIONBAR_PAGE_CHANGED",
     "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED",
     "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE",
     "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "PLAYER_TARGET_CHANGED", "COMBO_TARGET_CHANGED",
-    "MODIFIER_STATE_CHANGED" }) do -- (a macro with [mod] conditions shows another spell)
+    "MODIFIER_STATE_CHANGED", "ADDON_LOADED" }) do -- (a macro with [mod] conditions shows another spell)
     pcall(ev.RegisterEvent, ev, e)
   end
   for _, e in ipairs({ "UNIT_POWER_FREQUENT", "UNIT_POWER_UPDATE", "UNIT_COMBAT", "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED" }) do
@@ -774,6 +776,9 @@ function G.Init()
     elseif event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_MACROS" or event == "SPELLS_CHANGED"
       or event == "ACTIONBAR_PAGE_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
       G.ForgetSlots()
+      if event == "PLAYER_ENTERING_WORLD" then BT.Rescan() end
+    elseif event == "ADDON_LOADED" then
+      BT.Rescan() -- (a bar addon may have come in)
     end
     Soon()
   end)
