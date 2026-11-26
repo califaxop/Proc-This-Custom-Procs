@@ -324,7 +324,10 @@ Results (1.18.0 test build, Shaman):
   `C_Container.GetItemCooldown`, `C_Secrets.*`, `C_Spell.GetSpellDescription`).
 - 3: pass. `/pt spell`: "Lightning Shield: instant; lasts 600 s (from its tooltip)", "Flame Shock:
   instant; lasts 12 s (from its tooltip)": the tooltip wording parses on Forever.
-- 1, 4, 5, 6: pending.
+- 4: pass. After a `/reload`, Lightning Shield not tracked, cast in combat: "Not glowing: Lightning
+  Shield is on you (estimate: from your cast 4 s ago (lasts 600 s, from its tooltip))" (1.17.0:
+  "can't tell").
+- 1, 5, 6: pending.
 
 ## Known limitations
 
