@@ -328,8 +328,10 @@ Results (1.18.0 test build, Shaman):
   Shield is on you (estimate: from your cast 4 s ago (lasts 600 s, from its tooltip))" (1.17.0:
   "can't tell").
 - 5 (Flame Shock tracked in the Cooldown Manager): pass. Cast at a second mob through a mouseover
-  macro: your target "not on your target (from the Cooldown Manager)". The estimate path (not
-  tracked) is still to check, with two mobs of different names.
+  macro: your target "not on your target (from the Cooldown Manager)".
+- 5 (not tracked): pass. Target Succubus Minion, Flame Shock mouseover-cast on a Bloodsail Warlock:
+  "Flame Shock: not on your target (estimate: you haven't cast it on this target)" (1.17.0: "from
+  your cast"); not glowing because the shocks were on cooldown.
 - 1, 6: pending.
 
 ## Known limitations
