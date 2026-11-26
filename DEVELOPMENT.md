@@ -371,6 +371,12 @@ Milestone 3 verified in game; awaiting review before Milestone 4.
 4. Change a rule's colour, size and "while it's on" in combat and out: the glow follows at once.
 5. Turn an EllesmereUI bar off and on (if you use one): no glow left behind on the hidden bar.
 
+Results (1.19.0 test build, Shaman):
+- 2: pass. `/pt buttons`: "Blizzard 96, EllesmereUI not loaded, LibActionButton 0" (the library is
+  loaded by another addon, with no bars). Macros read: Call of the Elements, Flame Shock (with its
+  rule), Blood Fury; two macros (slots 25, 32) read as nothing: their contents to be checked.
+- 1, 3, 4, 5: pending.
+
 ## Known limitations
 
 - Buffs and debuffs not tracked in the Cooldown Manager can't be followed exactly in combat; the
