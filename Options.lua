@@ -833,8 +833,9 @@ end
 -- Share rules: export as text (this rule with the rules it uses, or all) or import text someone
 -- sent (Share.lua checks every field; nothing in it is run)
 local share
--- fill: text to put in the box at once (a /pt report), with its note
-function ns.OpenShare(fill, note)
+-- fill: text to put in the box at once, with its note; report: it's a /pt report (the bug report
+-- page button shows)
+function ns.OpenShare(fill, note, report)
   if not share then
     share = UI.Popup("ProcThisShare", 580, 196)
     local t = UI.Text(share, "title", "Share rules"); t:SetPoint("TOPLEFT", 20, -18)
@@ -875,13 +876,14 @@ function ns.OpenShare(fill, note)
     bug:SetPoint("TOPLEFT", one, "BOTTOMLEFT", 0, -10)
     share.bug = bug
     share.Reset = function()
-      text = ""; box:SetText(""); bug:Hide()
+      text = ""; box:SetText("")
       msg:SetText("Export rules to share them, or paste rules text and Import.")
     end
   end
   share.Reset()
   share:Show()
   if fill then share.Fill(fill, note) end
+  share.bug:SetShown(report == true)
 end
 
 -- /pt report: what a bug report needs, as one text to copy: the version and client, what the game
@@ -1031,8 +1033,7 @@ SlashCmdList.PROCTHIS = function(msg)
   if (msg or ""):lower():match("^report") then
     local ok, text = pcall(Report)
     if not ok then ns.Print("report failed: " .. tostring(text)); return end
-    ns.OpenShare(text, "Your report is in the box: press Ctrl+C to copy it. \"Bug report page\" gives the link to the form: open it in your browser and paste the report there.")
-    share.bug:Show()
+    ns.OpenShare(text, "Your report is in the box: press Ctrl+C to copy it. \"Bug report page\" gives the link to the form: open it in your browser and paste the report there.", true)
     return
   end
   if (msg or ""):lower():match("^perf") then for _, l in ipairs(ns.Glow.PerfReport()) do ns.Print(l) end return end
