@@ -12,7 +12,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 |---|---|---|
 | 1 | Condition engine reliability | Done in 1.16.0, verified in game, reviewed |
 | 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | Done in 1.17.0, verified in game, reviewed |
-| 3 | Spell, item and aura tracking (compatibility layer, macros) | **Done in 1.18.0, waiting for in-game validation and review** |
+| 3 | Spell, item and aura tracking (compatibility layer, macros) | **Done in 1.18.0, verified in game, waiting for review** |
 | 4 | Button discovery and rendering (providers, lifecycle, profiling) | Not started |
 | 5 | User experience (live status, priority, templates, import / export) | Not started |
 | 6 | Diagnostics and release readiness | Not started |
@@ -332,7 +332,10 @@ Results (1.18.0 test build, Shaman):
 - 5 (not tracked): pass. Target Succubus Minion, Flame Shock mouseover-cast on a Bloodsail Warlock:
   "Flame Shock: not on your target (estimate: you haven't cast it on this target)" (1.17.0: "from
   your cast"); not glowing because the shocks were on cooldown.
-- 1, 6: pending.
+- 1: pass (no Lua errors on 1.18.0).
+- 6 (`[mod:shift] Earth Shock; Lightning Bolt` macro): pass, the glow follows the modifier.
+
+Milestone 3 verified in game; awaiting review before Milestone 4.
 
 ## Known limitations
 
