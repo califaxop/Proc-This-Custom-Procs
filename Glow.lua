@@ -726,6 +726,11 @@ end
 -- events can come many times a second in combat (power, auras, cooldowns): update at most
 -- every 0.05 s, which still feels instant
 local pending = false
+function G.Tick()
+  if not InCombatLockdown() and GetTime() - lastUpdate < 1 then return end
+  G.Update()
+end
+
 local function Soon()
   if pending then return end
   pending = true
@@ -741,7 +746,7 @@ function G.Init()
     "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED",
     "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE",
     "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "PLAYER_TARGET_CHANGED", "COMBO_TARGET_CHANGED",
-    "MODIFIER_STATE_CHANGED", "ADDON_LOADED" }) do -- (a macro with [mod] conditions shows another spell)
+    "MODIFIER_STATE_CHANGED", "ADDON_LOADED", "BAG_UPDATE_COOLDOWN" }) do -- (a macro with [mod] conditions shows another spell)
     pcall(ev.RegisterEvent, ev, e)
   end
   for _, e in ipairs({ "UNIT_POWER_FREQUENT", "UNIT_POWER_UPDATE", "UNIT_COMBAT", "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED" }) do
@@ -782,7 +787,9 @@ function G.Init()
     end
     Soon()
   end)
-  -- safety net: the melee window running out and Cooldown Manager changes have no event of their own
-  C_Timer.NewTicker(0.25, G.Update)
+  -- safety net: the melee window running out, Cooldown Manager changes and estimates running out
+  -- have no event of their own (4 a second in combat). Out of combat everything is read directly
+  -- and has its events: once a second is enough
+  C_Timer.NewTicker(0.25, G.Tick)
   G.Update()
 end

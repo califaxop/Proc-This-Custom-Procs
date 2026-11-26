@@ -234,6 +234,7 @@ Audit of the 1.18.0 button and rendering code:
 | 21 | Low | Every rule was worked out on every update, also rules whose spell was on no shown button. | Only rules for spells on shown buttons (rules they use are worked out through them) |
 | 22 | Low | Every glowing button was set up again on every update: colour (three textures on three frames), pulse, the EllesmereUI shape key (a new string each time). | Set up when a layer starts, and again only after a restyle, a new button list or a size change; the gates still follow every update |
 | 23 | Low | No measure of what updates cost. | `/pt perf` (`debugprofilestop`) |
+| 24 | Low | The 0.25 s safety tick ran out of combat too (measured: 3.9 updates a second idle, 0.28 ms each), although out of combat every condition is read directly and has its event; an item's cooldown ending had none (`BAG_UPDATE_COOLDOWN` wasn't listened to). | Out of combat the tick updates once a second at most; `BAG_UPDATE_COOLDOWN` |
 
 Changes:
 - `Buttons.lua` (new): providers `{ name, Present, Collect(add), dynamic, Shape }`, `List()` (the
@@ -253,7 +254,7 @@ pip install lupa
 python3 tests/run_tests.py
 ```
 
-36 tests (1.19.0): button providers (LibActionButton, dropped buttons), rules skipped when not on
+37 tests (1.19.0): button providers (LibActionButton, dropped buttons), rules skipped when not on
 a shown button, looks set once; the compatibility layer (missing functions, older forms, errors), durations
 (kept across sessions, from tooltips), where casts went (mouseover / focus, target switch
 mid-cast, buffs on others), macros (`/pt buttons`, modifier updates); the result model (AND / OR / NOT on gate sets, partial sets, limits, and the
@@ -375,7 +376,11 @@ Results (1.19.0 test build, Shaman):
 - 2: pass. `/pt buttons`: "Blizzard 96, EllesmereUI not loaded, LibActionButton 0" (the library is
   loaded by another addon, with no bars). Macros read: Call of the Elements, Flame Shock (with its
   rule), Blood Fury; two macros (slots 25, 32) read as nothing: their contents to be checked.
-- 1, 3, 4, 5: pending.
+- 3: measured (5 rules, 96 Blizzard buttons, Windows client): idle 3.9 updates a second, 0.277 ms
+  each (0.857 ms at most): about 1 ms a second; a fight 13.9 a second, 0.586 ms each (2.637 ms at
+  most): about 8 ms a second, under 1% of the frame time at 60 fps. All 5 rules on shown buttons
+  (none skipped). Led to defect 24 (the idle tick); to measure again on the next build.
+- 1, 4, 5: pending.
 
 ## Known limitations
 

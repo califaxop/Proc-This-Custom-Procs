@@ -62,8 +62,9 @@ test or read it. `issecretvalue(v)` says whether it is.
 | `Frame:SetAlphaFromBoolean(value, ifTrue, ifFalse)` | gates from hidden booleans | In use |
 | `C_CurveUtil.CreateCurve()`, `Enum.LuaCurveType.Step` | step curves for hidden health / power | In use (`/pt power` reports whether it works) |
 | `LibStub("LibActionButton-1.0", true).buttonRegistry` (button → true); a button's `_state_type`, `_state_action` | LibActionButton bars (Bartender4, ElvUI...): their buttons and action slots | Docs (the library's source); not seen on Forever yet |
-| `debugprofilestop()` | `/pt perf`: how long updates take, in ms | Docs |
+| `debugprofilestop()` | `/pt perf`: how long updates take, in ms | Verified in game (`/pt perf`) |
 | `ADDON_LOADED`, `PLAYER_ENTERING_WORLD` | look for buttons again (a bar addon came in) | In use |
+| `BAG_UPDATE_COOLDOWN` | an item's cooldown started or ended | Docs |
 | `GetActionInfo(slot)` | → kind, id, subType: what a button holds (macro subtype "spell" / "item") | In use |
 | `GetMacroSpell(index)`, `GetMacroItem(index)` | older macro resolution | Docs |
 | `EllesmereUI.Glows` (`StartGlow`, `StartShapeGlow`, `StopAllGlows`, `STYLES`), `EllesmereUI.SHAPE_MASKS` | EllesmereUI's glow styles and shaped buttons | In use (EllesmereUI 9.9.x) |

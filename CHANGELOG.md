@@ -5,8 +5,10 @@
 - Glows on action bars built on LibActionButton (Bartender4, ElvUI and others), besides Blizzard's
   and EllesmereUI's.
 - Fixed: a button whose bar was turned off could keep its glow.
-- Lighter updates: only rules whose spell is on a shown button are worked out, and a glow's look is
-  set when it starts instead of on every update.
+- Lighter updates: only rules whose spell is on a shown button are worked out, a glow's look is
+  set when it starts instead of on every update, and out of combat the safety check runs once a
+  second instead of four times (everything has its own event there).
+- An item's glow follows the end of its cooldown at once.
 - New: `/pt perf` shows how long glow updates take; `/pt buttons` starts with how many buttons each
   kind of bar has.
 

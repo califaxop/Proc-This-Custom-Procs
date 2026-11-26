@@ -613,6 +613,21 @@ def _():
     C_Spell.IsSpellUsable = real
     """
 
+@test("performance: the safety tick runs 4 a second in combat, once a second out of combat")
+def _():
+    """
+    local n, real = 0, G.Update
+    G.Update = function() n = n + 1; real() end
+    real()                                                     -- (an update just happened)
+    for _ = 1, 4 do MOCK.now = MOCK.now + 0.25; G.Tick() end
+    assert(n == 1, "out of combat: once in a second, " .. n)
+    MOCK.Combat(true); n = 0
+    for _ = 1, 4 do MOCK.now = MOCK.now + 0.25; G.Tick() end
+    assert(n == 4, "in combat: every tick, " .. n)
+    assert(MOCK.events.BAG_UPDATE_COOLDOWN, "item cooldowns have their event")
+    G.Update = real
+    """
+
 @test("rendering: a glowing button's look is set once, not on every update; a restyle sets it again")
 def _():
     """
