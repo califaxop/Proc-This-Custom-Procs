@@ -10,6 +10,8 @@
 - More hidden conditions fit in one rule (6 together, up to 4 alternatives).
 - Fixed: "Rule X is inactive" could glow when X was active through a branch that couldn't be told.
 - A rule used by other rules is worked out once per update.
+- Several rules for one spell show their place in the rules list ("Lightning Bolt (#3)"), as
+  Rule rows name them.
 - A loop between rules names them (A > B > A), and the rule picker no longer offers a rule that
   would make one.
 

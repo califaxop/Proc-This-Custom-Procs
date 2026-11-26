@@ -483,7 +483,7 @@ local function BuildEditor(p)
       return
     end
     local name = ns.RuleSpellName(r)
-    e.title:SetText(name or "New rule")
+    e.title:SetText(name and ns.RuleLabel(r) or "New rule") -- (with its #place when several rules glow one spell)
     e.icon:SetTexture(name and ns.SpellIcon(name) or "Interface\\Icons\\INV_Misc_QuestionMark")
     e.enabled.Refresh(); e.RefreshLook(); e.spell.Refresh(); e.newGroupBox.Refresh()
     for _, cb in ipairs(e.checks) do cb.Refresh() end
@@ -618,7 +618,7 @@ local function BuildList(p)
       local name = ns.RuleSpellName(r)
       row.icon:SetTexture(name and ns.SpellIcon(name) or "Interface\\Icons\\INV_Misc_QuestionMark")
       row.icon:SetDesaturated(not r.enabled)
-      row.text:SetText(name or "(no spell)")
+      row.text:SetText(ns.RuleLabel(r)) -- (as the Rule rows name it: "Lightning Bolt (#3)")
       local on = (i == selected)
       local c = on and th.title or (row.hover and th.hover or (r.enabled and th.line or th.dim))
       row.text:SetTextColor(UI.RGB(c))

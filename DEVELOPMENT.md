@@ -11,7 +11,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Condition engine reliability | Done in 1.16.0, verified in game, reviewed |
-| 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | **Done in 1.17.0, waiting for in-game validation and review** |
+| 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | **Done in 1.17.0, verified in game, waiting for review** |
 | 3 | Spell, item and aura tracking (compatibility layer, macros) | Not started |
 | 4 | Button discovery and rendering (providers, lifecycle, profiling) | Not started |
 | 5 | User experience (live status, priority, templates, import / export) | Not started |
@@ -266,7 +266,8 @@ Results (1.17.0 test build, Shaman, solo):
   magenta [Health] [Target] [<] 50. Target 23%, you above 50%: magenta (1.16.0: no glow). You below
   50%, target 67%: cyan. One glow at a time. Also a plain yes (cyan, castable only) wins over the
   magenta rule: cyan.
-- 1, 4, 5: pending.
+- 1, 4, 5: pass. Found: Rule rows name same-spell rules by place ("Lightning Bolt (#3)") but the
+  rules list didn't show it; the list and the editor title now use the same label.
 
 
 ## Known limitations
