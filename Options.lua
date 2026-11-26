@@ -847,7 +847,7 @@ function ns.OpenShare(fill, note)
       text = str; box:SetText(str); box:SetFocus(); box:HighlightText()
       msg:SetText(why or "Copied into the box: press Ctrl+C to copy it, then paste it where you like.")
     end
-    share.Show = Show
+    share.Fill, share.box = Show, box
     local one = UI.Button(share, "Export this rule", 140, function()
       local r = ns.db.rules[selected]
       if r then Show(ns.Share.Export(ns.db.rules, r)) end
@@ -873,7 +873,7 @@ function ns.OpenShare(fill, note)
   end
   share.Reset()
   share:Show()
-  if fill then share.Show(fill, note) end
+  if fill then share.Fill(fill, note) end
 end
 
 -- /pt report: what a bug report needs, as one text to copy: the version and client, what the game

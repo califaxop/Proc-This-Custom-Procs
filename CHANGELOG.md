@@ -10,6 +10,7 @@ milestones (not published); 2.0.0 is all of them, plus Milestone 6:
   caught, and your rules.
 - New: `/pt debug` prints each rule's status changes as they happen.
 - Errors while working out a rule are kept (for `/pt report`) besides showing as "error".
+- (Release candidate fix: `/pt report` failed to open its window.)
 
 ## 1.20.0 (Milestone 5: user experience; test build)
 

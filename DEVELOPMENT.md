@@ -308,6 +308,17 @@ Release readiness:
    or Cooldown Manager), Flame Shock per target, two rules for one spell (colours), a `[mod:shift]`
    macro, `/pt perf` in a fight, the list's dots.
 
+Results (2.0.0 release candidate):
+- 3: pass. `/pt debug` in a fight: "Flame Shock: not glowing > glowing", "Lesser Healing Wave: not
+  glowing > the game decides", "Lightning Shield: glowing > not glowing (Lightning Shield is on
+  you)", "Earth Shock: glowing > not glowing (Stormstrike is not on your target)", "Flame Shock:
+  glowing > not glowing (on cooldown)", "Lesser Healing Wave: the game decides > not glowing (not in
+  combat)".
+- 2: failed: "Options.lua:847: bad argument #1 to 'SetText'". The Share window's fill function was
+  stored as `share.Show`, which hid the frame's own `Show` method: opening the window called it with
+  the window as the text. Renamed (`share.Fill`); a test now opens the real window (the earlier one
+  replaced `OpenShare`, so it couldn't catch this). To check again.
+
 ## Testing
 
 ### Offline
@@ -318,7 +329,7 @@ python3 tests/run_tests.py
 python3 tests/check_release.py   (before a release: versions, toc, workflow, tests)
 ```
 
-43 tests (2.0.0): diagnostics (errors kept and counted, `/pt debug` lines, `/pt report`
+44 tests (2.0.0): diagnostics (errors kept and counted, `/pt debug` lines, `/pt report`
 contents); sharing (round trip, Rule rows, one rule with what it uses; bad, damaged and
 hostile text refused, unknown fields and bad values dropped), templates, duplicate and priority, no
 target; button providers (LibActionButton, dropped buttons), rules skipped when not on

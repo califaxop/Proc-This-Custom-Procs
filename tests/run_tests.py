@@ -752,6 +752,18 @@ def _():
     assert(text:find("game functions: missing", 1, true), "the mock lacks some")
     """
 
+@test("diagnostics: /pt report opens the real Share window with the report in its box (2.0.0 test build: error)")
+def _():
+    """
+    wipe(NS.db.rules)
+    MOCK.Rule({ spell = "Lightning Bolt" })
+    SlashCmdList.PROCTHIS("report")
+    local win = _G.ProcThisShare
+    assert(win and win._shown, "the window is shown")
+    assert(win.box._text:find("rule 1 Lightning Bolt", 1, true), tostring(win.box._text))
+    win:Hide(); NS.OpenShare(); assert(win._shown and win.box._text == "", "opened again: empty")
+    """
+
 # ---------------------------------------------------------------------------------------------
 # Saved variables
 # ---------------------------------------------------------------------------------------------
