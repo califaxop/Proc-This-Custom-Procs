@@ -29,7 +29,10 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 | `/pt` (or `/proc`, `/procthis`) | Open settings |
 | `/pt test` | Show every glow for 3 seconds |
 | `/pt auras` | List auras and spell IDs (out of combat) |
-| `/pt cast <spell>` | Show a spell's cast time right now |
+| `/pt spell <spell>` (or `/pt cast`) | A spell's cast time right now, how long its buff or debuff lasts, and whether it has charges |
+| `/pt buttons` | What each macro button (and each button with a rule's spell) reads as right now |
+| `/pt power` | What the game lets Proc This! read of your mana, combo points, rage and energy |
+| `/pt api` | Which game functions this client has (for bug reports) |
 
 ## Good to know
 - In combat the game hides auras from addons: **track them in the Cooldown Manager**, or the rule can't see them.
@@ -43,6 +46,7 @@ New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 
 Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
 
 ## Recent changes
+- **1.18.0:** Fixed: a debuff cast through a mouseover or focus macro counted as on your target; switching targets mid-cast put the debuff on the new target; a buff cast on someone else counted as on you. How long buffs and debuffs last is now remembered across sessions (and read from the spell's tooltip until seen), so a buff cast in combat right after logging in is followed. Macros with [mod:shift] switch their glow at once. New commands: `/pt spell`, `/pt buttons`, `/pt api`.
 - **1.17.0:** Hidden conditions joined by OR now glow: an "any one" group or rules joined by OR glow when any of their conditions holds, even ones the game hides in combat (before: "can't tell", no glow). Several rules for one spell now all count, each in its own look, and never two glows at once; the rules list shows their place ("Lightning Bolt (#3)"), as Rule rows name them. More hidden conditions fit in one rule. A loop between rules names them, and the rule picker no longer offers a rule that would make one. Fixed: "Rule X is inactive" could glow when X was active through a branch that couldn't be told.
 - **1.16.0:** More reliable conditions. Each one now answers yes, no, "the game decides" or "can't tell", and "can't tell" never lights a glow. Fixed: a buff not tracked in the Cooldown Manager counted as missing in combat when it had never been seen; casting a spell kept its buff "on" until combat ended; a cooldown the game hides counted as ready; your debuffs on a target were forgotten when you switched targets and back. The rule status in the settings now says where each answer comes from (read, Cooldown Manager or an estimate from your casts) and "can't tell" apart from a plain no.
 - **1.15.1:** Fixed: the settings window's text is readable with EllesmereUI installed (EllesmereUI's quest tracker shrinks the game's tracker fonts to 1 px, and the window used them). No EllesmereUI / FlareUI mode settings any more: Proc This! uses EllesmereUI (glows on its bars, its glow styles, its window style) or FlareUI's window style on its own whenever one is installed.

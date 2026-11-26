@@ -734,9 +734,11 @@ local function PageHelp(page)
   para("Health and Mana rows: yours or your target's, compared with a %: > (more than), >= (at least), < (less than), <= (at most) or = (exactly). Example: Healing Wave glows while your target's health is < 40%; Evocation while your mana is < 20%. When the game hides the value (health in combat, your mana always), the game itself checks it against your % and switches the glow: Proc This! never sees the number. A dead target, or one without mana, never counts.", "note")
   para("Combo Points, Rage and Energy rows: yours, compared with an amount the same way. Example: Eviscerate glows while your combo points are >= 5, or = 3; Sinister Strike while your energy is >= 45. Combo points are always readable; when the game hides rage or energy (in combat), the game itself checks them.", "note")
   para("Rules are kept per character: each character has its own list. Settings > Rules on other characters copies another character's rules into this one.", "note")
-  para("Instant Cast rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt cast <spell> shows a spell's cast time.", "note")
+  para("Instant Cast rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt spell <spell> shows a spell's cast time.", "note")
   para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
-    "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      /pt cast <spell>  its cast time now")
+    "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      " ..
+    "/pt spell <spell>  its cast time, how long it lasts, charges      /pt buttons  what each macro button reads as now      " ..
+    "/pt power  what's readable of your power      /pt api  which game functions this client has")
   sec("Feedback")
   local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
     UI.ShowLink("ProcThisLinkWindow", "Proc This!: bugs and ideas", "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose")
@@ -850,7 +852,7 @@ local function ListAuras()
   for _, s in ipairs({ { "target", "HARMFUL", "Target debuff" }, { "target", "HELPFUL", "Target buff" },
                        { "player", "HELPFUL", "Your buff" }, { "player", "HARMFUL", "Your debuff" } }) do
     for i = 1, 40 do
-      local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, s[1], i, s[2])
+      local ok, a = ns.API.Call("AuraByIndex", s[1], i, s[2])
       if not ok or not a then break end
       if ns.Readable(a.name) then
         any = true
@@ -861,18 +863,25 @@ local function ListAuras()
   if not any then ns.Print("no auras found on you or your target.") end
 end
 
--- /pt cast <spell>: its cast time right now (0 = instant), as Instant rows read it
-local function ShowCast(spell)
+-- /pt spell <spell> (or /pt cast): what Proc This! knows of it right now: its cast time (0 =
+-- instant, as Instant rows read it), how long its buff or debuff lasts (learned from reads, or from
+-- its tooltip) and whether it has charges
+local function ShowSpell(spell)
   spell = strtrim(spell or "")
   if spell == "" then spell = ns.SpellName(403) or "Lightning Bolt" end
   local ct = ns.State.CastTime(spell)
-  ns.Print(format("%s%s: %s", spell, InCombatLockdown() and " (in combat)" or "",
-    ct == nil and "cast time hidden or unknown" or (ct <= 0 and "instant" or format("%d ms cast", ct))))
+  local d, from = ns.State.Duration(spell)
+  ns.Print(format("%s%s: %s; lasts %s%s", spell, InCombatLockdown() and " (in combat)" or "",
+    ct == nil and "cast time hidden or unknown" or (ct <= 0 and "instant" or format("%d ms cast", ct)),
+    d and format("%d s (%s)", d, from == "tooltip" and "from its tooltip" or "seen") or "unknown (not seen yet, none in its tooltip)",
+    ns.State.Charged(spell) and "; has charges" or ""))
 end
 
 SlashCmdList.PROCTHIS = function(msg)
-  local castArg = (msg or ""):match("^%s*[Cc][Aa][Ss][Tt]%s*(.*)$")
-  if castArg then ShowCast(castArg); return end
+  local spellArg = (msg or ""):match("^%s*[Cc][Aa][Ss][Tt]%s*(.*)$") or (msg or ""):match("^%s*[Ss][Pp][Ee][Ll][Ll]%s*(.*)$")
+  if spellArg then ShowSpell(spellArg); return end
+  if (msg or ""):lower():match("^api") then for _, l in ipairs(ns.API.Report()) do ns.Print(l) end return end
+  if (msg or ""):lower():match("^button") then for _, l in ipairs(ns.Glow.ButtonReport()) do ns.Print(l) end return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end
   if (msg or ""):lower():match("^power") then

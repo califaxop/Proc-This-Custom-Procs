@@ -9,6 +9,9 @@ Verification status:
 - **Inferred**: assumed from behaviour, not tested.
 - **Unsupported**: not available to addons, or not used.
 
+Every function below is called through the compatibility layer (`Compat.lua`, 1.18.0): the first
+form the client has is used, always protected; `/pt api` lists which form this client has.
+
 "Secret" = the value can be hidden from addons: an addon can pass it to some calls, not compare,
 test or read it. `issecretvalue(v)` says whether it is.
 
@@ -30,15 +33,19 @@ test or read it. `issecretvalue(v)` says whether it is.
 | `C_Spell.IsSpellUsable(spell)` | → isUsable, insufficientPower | can be hidden | "Castable": hidden → a gate | In use (the hidden case: Inferred) |
 | `C_Item.IsUsableItem(item)` | → usable, noMana | — | items' "usable" | Docs |
 | `C_Container.GetItemCooldown(itemID)` | → start, duration, enable | — | items' "off cooldown" (hidden → UNKNOWN) | Docs |
-| `C_Spell.GetSpellInfo(spell)` | → SpellInfo { castTime, spellID, ... } | — | "Instant" rows (cast time 0) | Verified in game (`/pt cast`: readable in combat) |
+| `C_Spell.GetSpellInfo(spell)` | → SpellInfo { castTime, spellID, ... } | — | "Instant" rows (cast time 0); a spell's ID for its tooltip | Verified in game (`/pt cast`: readable in combat) |
+| `C_Spell.GetSpellDescription(spellID)` (older: `GetSpellDescription`) | → text | — | a buff's or debuff's duration before it's ever read ("for 12 sec", "Lasts 10 min": the longest; English wording) | Docs; the wording: Inferred (check with `/pt spell`) |
 | `C_Spell.GetSpellName(id)`, `C_Item.GetItemNameByID`, `C_Item.GetItemInfoInstant` | — | — | names | In use |
 | `UNIT_SPELLCAST_SUCCEEDED` (unit, castGUID, spellID) | event | spellID can be hidden (then ignored) | your casts, for estimates | In use |
+| `UNIT_SPELLCAST_SENT` (unit, target name, castGUID, spellID) | event | the name or castGUID may be hidden (then the cast counts as before) | where a cast went: your target, another unit, you | Docs |
+| `MODIFIER_STATE_CHANGED` | event | — | macros with `[mod]` conditions: update at once | Docs |
 | `SPELL_ACTIVATION_OVERLAY_GLOW_SHOW / HIDE` (spellID) | events | — | "Proc" | In use |
 
 ## Units
 
 | API | Signature | Secret when | Use | Status |
 |---|---|---|---|---|
+| `UnitName(unit)` | → name, realm | can be hidden | compared with a cast's target name | Docs |
 | `UnitGUID(unit)` | → GUID or nil | unit identity restricted (PvP tokens) | keys your debuff casts per target; hidden → only the current target | Docs |
 | `HasFullControl()` | → bool | not marked | "Control": hidden → a gate | Docs |
 | `UnitAffectingCombat(unit)` | → bool | not marked | "In combat": hidden → a gate | Docs |
@@ -63,5 +70,8 @@ test or read it. `issecretvalue(v)` says whether it is.
 - `/pt auras`: your and your target's auras with IDs (out of combat only).
 - `/pt power`: what's readable of your mana, combo points, rage and energy, and whether the
   game-side check works.
-- `/pt cast <spell>`: its cast time now.
+- `/pt spell <spell>` (or `/pt cast`): its cast time now, how long it lasts and where that's from,
+  whether it has charges.
+- `/pt buttons`: what each macro button (and each button with a rule's spell) reads as now.
+- `/pt api`: which form of each function this client has.
 - The settings window's live status (per rule): each row's answer and its source.

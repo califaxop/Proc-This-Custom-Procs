@@ -3,7 +3,7 @@
 -- comparing or testing one), so these tests can't prove a hidden value is never read.
 MOCK = { now = 100, locked = false, inCombat = false, control = true, usable = true,
   cooldown = { isActive = false, isOnGCD = false }, buffs = {}, targetDebuffs = {}, myDebuffs = {},
-  target = "Creature-1", guidHidden = false, cdmOn = false, cdm = {}, events = {}, sounds = 0 }
+  target = "Creature-1", targetName = "Mob", guidHidden = false, cdmOn = false, cdm = {}, events = {}, sounds = 0 }
 
 function MOCK.Secret(v) return { secret = true, v = v } end
 issecretvalue = function(v) return type(v) == "table" and v.secret == true end
@@ -64,7 +64,7 @@ MOCK.spells = { [945] = "Lightning Shield", [403] = "Lightning Bolt", [8050] = "
 MOCK.slots = { [1] = { "spell", 945 }, [2] = { "spell", 403 }, [3] = { "spell", 8050 }, [4] = { "spell", 8042 },
   [5] = { "spell", 17364 } }
 for i = 1, 5 do local b = obj("ActionButton" .. i); b.action = i end
-GetActionInfo = function(a) local s = MOCK.slots[a]; if s then return s[1], s[2] end end
+GetActionInfo = function(a) local s = MOCK.slots[a]; if s then return s[1], s[2], s[3] end end
 local function NameOf(x) return type(x) == "number" and MOCK.spells[x] or x end
 C_Spell = {
   GetSpellName = function(id) return MOCK.spells[id] end,
@@ -109,7 +109,7 @@ UnitGUID = function(u)
   if u == "target" then if MOCK.guidHidden then return MOCK.Secret(MOCK.target) end return MOCK.target end
   return "Player-1"
 end
-UnitName = function() return "Tester" end
+UnitName = function(u) if u == "target" then return MOCK.targetName end return "Tester" end
 GetRealmName = function() return "Realm" end
 UnitClass = function() return "Shaman", "SHAMAN" end
 UnitAffectingCombat = function() return MOCK.inCombat end
@@ -135,6 +135,10 @@ function MOCK.Fire(event, ...)
 end
 -- you cast a spell (UNIT_SPELLCAST_SUCCEEDED: unit, castGUID, spellID)
 function MOCK.Cast(id) MOCK.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast", id) end
+-- the cast in two steps, as the game sends them: UNIT_SPELLCAST_SENT (unit, target name, castGUID,
+-- spellID) when it starts, UNIT_SPELLCAST_SUCCEEDED (unit, castGUID, spellID) when it goes off
+function MOCK.Sent(id, to, guid) MOCK.Fire("UNIT_SPELLCAST_SENT", "player", to or "", guid, id) end
+function MOCK.Done(id, guid) MOCK.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", guid, id) end
 -- something hits you (UNIT_COMBAT: unit, action, descriptor, amount, school)
 function MOCK.Hit(action) MOCK.Fire("UNIT_COMBAT", "player", action or "WOUND", "", 10, 1) end
 -- combat: the game starts hiding auras

@@ -11,8 +11,8 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 | # | Milestone | Status |
 |---|---|---|
 | 1 | Condition engine reliability | Done in 1.16.0, verified in game, reviewed |
-| 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | **Done in 1.17.0, verified in game, waiting for review** |
-| 3 | Spell, item and aura tracking (compatibility layer, macros) | Not started |
+| 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | Done in 1.17.0, verified in game, reviewed |
+| 3 | Spell, item and aura tracking (compatibility layer, macros) | **Done in 1.18.0, waiting for in-game validation and review** |
 | 4 | Button discovery and rendering (providers, lifecycle, profiling) | Not started |
 | 5 | User experience (live status, priority, templates, import / export) | Not started |
 | 6 | Diagnostics and release readiness | Not started |
@@ -33,11 +33,12 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 
 ## Architecture (1.17.0)
 
-Load order (ProcThis.toc): Core → Result → State → Glow → UI → Options.
+Load order (ProcThis.toc): Core → Compat → Result → State → Glow → UI → Options.
 
 | File | Module | Does |
 |---|---|---|
 | Core.lua | `ns` | Rule and condition defaults (`NEW_RULE`, `NEW_AURA`), saved variables (`ProcThisDB`: shared settings, `chars[Name-Realm].rules`), migrations of older rule formats, rule ids, per-character set-up and copying, spell / item names, glow colours and looks, EllesmereUI / FlareUI detection |
+| Compat.lua | `ns.API` | The compatibility layer (1.18.0): every game function used to read conditions and buttons, by name, with the forms it may take (newer `C_` namespaces, older globals); `API.Call` (safe: answered / failed / not on this client), `API.Has`, `/pt api` |
 | Result.lua | `ns.Result` | The result model: TRUE / FALSE / GATED / UNKNOWN / ERROR, and how they combine (AND, OR, NOT). Pure Lua |
 | State.lua | `ns.State` | Every condition reader: buffs (direct, Cooldown Manager, estimates), target debuffs (direct, Cooldown Manager, estimates from your casts per target), health / mana / combo points / rage / energy (readable, or step curves for hidden values), cast time, melee, castable, cooldown, control, combat, proc flag |
 | Glow.lua | `ns.Glow` | Button discovery (Blizzard bars, EllesmereUI's `EABButton`s), what each button holds (spell, item, macro), the evaluator (rows → groups → rule), the update loop and events, the glow frames (Blizzard's alert template, gates, styles, EllesmereUI glows) |
@@ -163,8 +164,8 @@ Severity: High = wrong glow in normal play; Medium = wrong in some situations; L
 | R2 | At most 4 gates per glow (`MAX_GATES`); more → UNKNOWN. | 1.17.0: 6 per layer, 4 layers; what doesn't fit is left out (partial) |
 | R3 | A rule used by several "Rule X" rows is evaluated once per row, every update; no caching. | Fixed in 1.17.0 (once per pass) |
 | R4 | Several rules for one spell: only the first GATED rule's gates are used, so a later GATED rule that holds doesn't glow (never a wrong glow). | Fixed in 1.17.0 (each GATED rule's terms are a layer) |
-| R5 | Estimates can be wrong (see "Aura sources"): a cast that missed, a buff ended early. They're labelled, not hidden. | M3 |
-| R6 | Macros: the spell or item is read every update (`GetActionInfo` subtype, `GetMacroSpell`, `GetMacroItem`); conditional macros follow what the game reports for the current conditions. Not verified for every macro form. | M3 |
+| R5 | Estimates can be wrong (see "Aura sources"): a cast that missed, a buff ended early. They're labelled, not hidden. | 1.18.0: casts at other units and target switches mid-cast fixed (defects 12-14); a miss or resist still can't be seen (no event says which spell missed) |
+| R6 | Macros: the spell or item is read every update (`GetActionInfo` subtype, `GetMacroSpell`, `GetMacroItem`); conditional macros follow what the game reports for the current conditions. Not verified for every macro form. | 1.18.0: modifier changes update at once; `/pt buttons` shows what each macro reads as, to check forms in game |
 | R7 | Buttons: a fixed list of Blizzard bars plus EllesmereUI's `EABButton1..180` (rebuilt every 5 s while EllesmereUI is on). No provider interface yet. | M4 |
 | R8 | Every rule is evaluated on every update (events merged to 0.05 s, plus a 0.25 s tick for the melee window and Cooldown Manager changes, which have no events). Not profiled yet. | M4 |
 | R9 | A target debuff row on "missing" with no target reads "absent" (true): the rule can glow with no target if its spell is castable. Unchanged behaviour. | M5 (review) |
@@ -190,6 +191,37 @@ Changes:
 
 No new game APIs: layers are more of the same frames and `SetAlphaFromBoolean` / curve gates.
 
+## Milestone 3 (1.18.0)
+
+Audit of the 1.17.0 tracking code:
+
+| # | Sev. | Defect | Fix |
+|---|---|---|---|
+| 12 | Medium | A debuff cast at another unit (a mouseover or focus macro) was recorded on your target: "missing" didn't glow on your target, and a spell that uses up charges took one from your target's. | `UNIT_SPELLCAST_SENT` says where the cast went: a named unit that isn't your target isn't recorded |
+| 13 | Medium | A cast with a cast time, and a target switch during it: recorded on the target you switched to. | The target is taken when the cast starts (`SENT`), matched to `SUCCEEDED` by castGUID |
+| 14 | Medium | A buff cast on someone else (a mouseover heal-over-time, a party buff) counted as on you. | A cast sent to a named unit that isn't you isn't counted as a buff on you |
+| 15 | Low | Durations were learned only for the session: after a `/reload` or login, the first cast of a buff in combat was "can't tell", and a target debuff without its own "lasts" was assumed 12 s. | Kept per character (`chars[...].durations`, `charged`); never read: the spell's tooltip ("for 12 sec", "Lasts 10 min"), labelled |
+| 16 | Low | `GetActionInfo` was called unprotected: an error in it stopped every glow update. | Through the compatibility layer |
+| 17 | Low | A macro with `[mod]` conditions changed spell on a modifier key, but the glow followed only at the next 0.25 s tick. | `MODIFIER_STATE_CHANGED` updates at once |
+| 18 | Low | State.lua: a comment for a removed function, and the cast-time comment far from its function. | Removed / moved |
+
+Changes:
+- `Compat.lua` (new): the compatibility layer; State and Glow read through it (`API.Call`).
+- `State.lua`: durations and charges kept per character (`Mem()`), `TooltipDuration`, `Duration`
+  (learned, else tooltip), `OnSent` / `OnCast(spellID, castGUID)` with where each cast went.
+- `Glow.lua`: `UNIT_SPELLCAST_SENT`, `MODIFIER_STATE_CHANGED`; `ButtonReport` (`/pt buttons`).
+- `Options.lua`: `/pt spell` (cast time, duration and where it's from, charges; `/pt cast` still
+  works), `/pt buttons`, `/pt api`.
+
+Where a cast went (`State.OnSent`), from `UNIT_SPELLCAST_SENT`'s target name:
+- empty, or hidden: as before (your target now; on you);
+- your target's name (a realm after a "-" is ignored): your target when the cast started; if the
+  game hides its GUID and you've changed target since, it isn't recorded;
+- another name: not your target (no debuff recorded, no charge used there); and if it isn't your
+  name either, not a buff on you.
+Two units with the same name can't be told apart (a mouseover cast on a second "Southern Sand
+Crawler" counts as on your target).
+
 ## Testing
 
 ### Offline
@@ -199,7 +231,9 @@ pip install lupa
 python3 tests/run_tests.py
 ```
 
-26 tests (1.17.0): the result model (AND / OR / NOT on gate sets, partial sets, limits, and the
+33 tests (1.18.0): the compatibility layer (missing functions, older forms, errors), durations
+(kept across sessions, from tooltips), where casts went (mouseover / focus, target switch
+mid-cast, buffs on others), macros (`/pt buttons`, modifier updates); the result model (AND / OR / NOT on gate sets, partial sets, limits, and the
 random-formula check against every truth assignment), buff estimates and unknowns (charged buffs),
 debuff estimates per target and charges, cooldown / usable / control results, rule evaluation
 with mixed results, OR of hidden checks drawn as exclusive layers (checked for every combination
@@ -269,6 +303,21 @@ Results (1.17.0 test build, Shaman, solo):
 - 1, 4, 5: pass. Found: Rule rows name same-spell rules by place ("Lightning Bolt (#3)") but the
   rules list didn't show it; the list and the editor title now use the same label.
 
+
+### In-game checklist (Milestone 3 → 4)
+
+1. Install 1.18.0, `/reload`. Glows as in 1.17.0; no Lua errors.
+2. `/pt api`: every line names a function (none "not on this client"); send the list.
+3. `/pt spell Lightning Shield`, `/pt spell Flame Shock`: a duration "from its tooltip" (or "seen"
+   once read). Then `/reload` and cast Lightning Shield in combat before it was read out of combat:
+   "on you (estimate: from your cast …)" (1.17.0: "can't tell").
+4. Flame Shock rule (not tracked in the Cooldown Manager): with a target, cast Flame Shock at a
+   different mob through a `/cast [@mouseover] Flame Shock` macro: your target still reads "you
+   haven't cast it on this target" (1.17.0: "from your cast").
+5. A macro with `[mod:shift] Earth Shock; Lightning Bolt` on a bar, with rules for both: holding
+   Shift switches the glow at once. `/pt buttons` shows the macro as "macro -> Lightning Bolt"
+   (and Earth Shock with Shift held).
+6. Any "can't tell" or "error": screenshot it with the rule's settings.
 
 ## Known limitations
 

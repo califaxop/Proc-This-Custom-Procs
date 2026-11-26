@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.18.0 (Milestone 3: spell, item and aura tracking)
+
+- Fixed: a debuff cast at another unit (a mouseover or focus macro) counted as on your target.
+- Fixed: switching targets while casting put the debuff on the new target.
+- Fixed: a buff cast on someone else counted as on you.
+- How long buffs and debuffs last is remembered per character across sessions, and taken from the
+  spell's tooltip until it's been seen: a buff cast in combat right after logging in is no longer
+  "can't tell".
+- Macros with modifier conditions ([mod:shift]) switch their glow at once.
+- New: `/pt spell <spell>` (cast time, duration, charges), `/pt buttons` (what each macro reads as),
+  `/pt api` (which game functions this client has).
+- Every game function is read through one compatibility layer, always protected.
+
 ## 1.17.0 (Milestone 2: advanced condition evaluation)
 
 - Conditions the game hides now work when joined by OR ("any one" groups, rules joined by OR):

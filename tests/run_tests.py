@@ -471,6 +471,107 @@ def _():
     """
 
 # ---------------------------------------------------------------------------------------------
+# Milestone 3: the compatibility layer, durations, where casts went, macros
+# ---------------------------------------------------------------------------------------------
+@test("compat: a missing function -> nil (UNKNOWN), an older form is used when the newer one is missing")
+def _():
+    """
+    local API = NS.API
+    assert(API.Call("ItemUsable", 1) == nil, "no C_Item.IsUsableItem / IsUsableItem in the mock")
+    assert(S.Usable("Hearthstone", 6948) == R.UNKNOWN)
+    local newer = C_Spell.IsSpellUsable
+    C_Spell.IsSpellUsable = nil; IsUsableSpell = function() return false end
+    assert(S.Usable("Lightning Bolt") == R.FALSE, "the older global answers")
+    C_Spell.IsSpellUsable = newer
+    local ok, msg = API.Call("SpellUsable", "x"); assert(ok == true)
+    MOCK.usableError = true; ok = API.Call("SpellUsable", "x"); assert(ok == false, "an error is false, not nil")
+    local report = table.concat(API.Report(), " | ")
+    assert(report:find("SpellUsable: C_Spell.IsSpellUsable", 1, true) and report:find("ItemUsable: .*not on this client"), report)
+    """
+
+SAVED_DUR = '''
+ProcThisDB = { chars = { ["Tester-Realm"] = { rules = {}, durations = { ["Lightning Shield"] = 600 }, charged = {} } } }
+'''
+
+@test("durations: kept from an earlier session - a cast in combat right after login is an estimate", saved=SAVED_DUR)
+def _():
+    """
+    MOCK.Combat(true); MOCK.now = MOCK.now + 1; MOCK.Cast(945)
+    local has, how, d = S.HasBuff("Lightning Shield", true)
+    assert(has == true and how == "estimate" and d:find("lasts 600 s)", 1, true), tostring(d))
+    """
+
+@test("durations: a read is kept in the character's saved variables")
+def _():
+    """
+    MOCK.buffs["Lightning Shield"] = { duration = 600, expirationTime = MOCK.now + 600, applications = 3 }
+    S.HasBuff("Lightning Shield")
+    assert(NS.char.durations["Lightning Shield"] == 600 and NS.char.charged["Lightning Shield"] == true)
+    """
+
+@test("durations: never seen -> from the spell's tooltip (labelled); a learned one comes first")
+def _():
+    """
+    C_Spell.GetSpellDescription = function(id)
+      if id == 945 then return "Surrounds the caster with balls of lightning. Each ball deals 13 Nature damage. Lasts 10 min." end
+      if id == 8050 then return "Instantly sears the target with fire, causing 25 Fire damage immediately and 28 Fire damage over 12 sec." end
+      return ""
+    end
+    MOCK.Combat(true); MOCK.Cast(945)
+    local has, how, d = S.HasBuff("Lightning Shield", true)
+    assert(has == true and how == "estimate" and d:find("lasts 600 s, from its tooltip", 1, true), tostring(d))
+    MOCK.Rule({ spell = "Earth Shock", auras = { { name = "Flame Shock", unit = "target", kind = "debuff", mode = "missing", mine = true } } })
+    MOCK.Cast(8050)
+    local _, _, d2 = S.TargetDebuff("Flame Shock", true, 0)
+    assert(d2:find("lasts 12 s, from its tooltip", 1, true), d2)
+    NS.char.durations["Flame Shock"] = 15
+    _, _, d2 = S.TargetDebuff("Flame Shock", true, 0); assert(d2:find("lasts 15 s)", 1, true), d2)
+    assert(S.TooltipDuration("Purge") == nil, "no text: nothing")
+    """
+
+@test("where casts went: a mouseover / focus cast isn't put on your target; a switch mid-cast keeps the first target")
+def _():
+    """
+    MOCK.Combat(true)
+    MOCK.Rule({ spell = "Earth Shock", auras = { { name = "Flame Shock", unit = "target", kind = "debuff", mode = "missing", mine = true, dur = 12 } } })
+    MOCK.Sent(8050, "Other Mob", "g1"); MOCK.Done(8050, "g1")
+    local has, _, d = S.TargetDebuff("Flame Shock", true, 12)
+    assert(has == false and d:find("haven't cast"), "went to another unit (1.17.0: counted on your target)")
+    MOCK.Sent(8050, "Mob", "g2")
+    MOCK.target, MOCK.targetName = "Creature-2", "Other"; MOCK.Fire("PLAYER_TARGET_CHANGED")
+    MOCK.Done(8050, "g2")
+    assert(S.TargetDebuff("Flame Shock", true, 12) == false, "not on the target you switched to")
+    MOCK.target, MOCK.targetName = "Creature-1", "Mob"; MOCK.Fire("PLAYER_TARGET_CHANGED")
+    assert(S.TargetDebuff("Flame Shock", true, 12) == true, "on the one it was cast at")
+    MOCK.Sent(8050, "Mob-OtherRealm", "g3"); MOCK.Done(8050, "g3")
+    assert(S.TargetDebuff("Flame Shock", true, 12) == true, "a realm after the name is the same unit")
+    """
+
+@test("where casts went: a buff cast on someone else isn't counted as on you")
+def _():
+    """
+    NS.char.durations = { ["Lightning Shield"] = 600 }
+    MOCK.Combat(true)
+    MOCK.Sent(945, "Friend", "g1"); MOCK.Done(945, "g1")
+    assert(S.HasBuff("Lightning Shield", true) == nil, "not counted as on you (1.17.0: on you)")
+    MOCK.Sent(945, "", "g2"); MOCK.Done(945, "g2")
+    assert(S.HasBuff("Lightning Shield", true) == true, "a self cast")
+    """
+
+@test("macros: a modifier change updates at once; /pt buttons shows what a macro reads as")
+def _():
+    """
+    assert(MOCK.events.MODIFIER_STATE_CHANGED, "registered")
+    MOCK.slots[3] = { "macro", 403, "spell" }; MOCK.Fire("ACTIONBAR_SLOT_CHANGED", 3)
+    local report = table.concat(G.ButtonReport(), " | ")
+    assert(report:find("ActionButton3 (slot 3): macro -> Lightning Bolt", 1, true), report)
+    assert(report:find("ActionButton1 (slot 1): spell Lightning Shield |cff60ff60(has a rule)", 1, true), report)
+    MOCK.slots[3] = { "macro", 999, "" }; MOCK.Fire("ACTIONBAR_SLOT_CHANGED", 3)
+    report = table.concat(G.ButtonReport(), " | ")
+    assert(report:find("nothing Proc This! can read", 1, true), report)
+    """
+
+# ---------------------------------------------------------------------------------------------
 # Saved variables
 # ---------------------------------------------------------------------------------------------
 SAVED_OLD = '''

@@ -5,34 +5,33 @@ local _, ns = ...
 local S = {}
 ns.State = S
 local isSecret, Readable, canAccess = ns.isSecret, ns.Readable, ns.canAccess
+local API = ns.API
 
 ---------------------------------------------------------------------------
 -- Buffs on you
 ---------------------------------------------------------------------------
 -- In combat the game hides your buffs from addons (C_Secrets says when).
 function S.AurasLocked()
-  if C_Secrets and C_Secrets.ShouldAurasBeSecret then
-    local ok, secret = pcall(C_Secrets.ShouldAurasBeSecret)
-    if ok and Readable(secret) then return secret end
-    return true
-  end
-  return false
+  local ok, secret = API.Call("AurasSecret")
+  if ok == nil then return false end -- (a client without secrets)
+  if ok and Readable(secret) then return secret end
+  return true
 end
 
 -- Out of combat: read your buffs directly. true / false, or nil if unreadable; plus the aura (when
 -- readable: for how long it lasts and when it ends).
 local function AuraByName(name)
-  if C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
-    local ok, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", name, "HELPFUL")
+  if API.Has("AuraBySpellName") then
+    local ok, aura = API.Call("AuraBySpellName", "player", name, "HELPFUL")
     if ok then
       if aura == nil then return false end
       if canAccess(aura) then return true, aura end
       return nil
     end
   end
-  if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+  if API.Has("AuraByIndex") then
     for i = 1, 60 do
-      local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+      local ok, aura = API.Call("AuraByIndex", "player", i, "HELPFUL")
       if not ok then return nil end -- (failed: can't tell, not "absent")
       if not aura then return false end
       if not canAccess(aura) or not Readable(aura.name) then return nil end
@@ -51,7 +50,7 @@ local function CooldownNames(cid)
   local cached = cdmNames[cid]
   if cached then return cached end
   local names = {}
-  local ok, info = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cid)
+  local ok, info = API.Call("CooldownViewerInfo", cid)
   if ok and type(info) == "table" then
     local function add(id) local n = Readable(id) and ns.SpellName(id); if n then names[n] = true end end
     add(info.spellID); add(info.overrideSpellID); add(info.overrideTooltipSpellID)
@@ -72,7 +71,7 @@ local function IconActive(f)
 end
 
 local function FromCooldownManager(name)
-  if not (C_CooldownViewer and GetCVarBool and GetCVarBool("cooldownViewerEnabled")) then return nil end
+  if not (API.Has("CooldownViewerInfo") and GetCVarBool and GetCVarBool("cooldownViewerEnabled")) then return nil end
   local found, active, item = false, false, nil
   for _, viewerName in ipairs(CDM_VIEWERS) do
     local viewer = _G[viewerName]
@@ -97,16 +96,58 @@ end
 -- buffs; a buff not tracked in the Cooldown Manager is then estimated, and only where that's sound:
 --   seen[name] = { present, at, expires (GetTime; 0 = no end time) }: the last direct read
 --   castAt[name] = when you last cast a spell of that name (the cast doesn't prove the buff landed)
---   buffDur[name] = how long it lasts, from direct reads
---   charged[name] = it has charges or stacks when read (e.g. Lightning Shield): being hit can use it
---     up before its time runs out, so once you're hit after the cast or read, it's unknown
+--   Mem().durations[name] = how long it lasts, from direct reads (buffs and debuffs; kept per
+--     character across sessions, 1.18.0); else its tooltip's duration (S.TooltipDuration)
+--   Mem().charged[name] = it has charges or stacks when read (e.g. Lightning Shield): being hit can
+--     use it up before its time runs out, so once you're hit after the cast or read, it's unknown
 -- Estimates (how = "estimate"):
 --   - you cast it after the last read, and its duration is known: on until that runs out, then off
 --   - read on with an end time: on until then, then off (it can end sooner: a dispel)
 --   - read on with no end time: on
 --   - read off, and it's the rule's own spell (only your cast puts it on you): off until you cast it
 -- Anything else is unknown (how = "unknown"): never treated as on or as off.
-local seen, castAt, buffDur, charged = {}, {}, {}, {}
+local seen, castAt = {}, {}
+
+-- what's kept across sessions: in this character's saved variables (a table of its own until the
+-- character is set up at login)
+local early = {}
+local function Mem()
+  local m = ns.char or early
+  m.durations = m.durations or {}
+  m.charged = m.charged or {}
+  return m
+end
+
+-- A spell's duration from its tooltip text ("... for 12 sec.", "Lasts 10 min."): the longest one
+-- it names, in seconds; nil when it names none (or the text isn't loaded yet). English wording.
+local tooltipDur = {}
+local UNIT_SECONDS = { sec = 1, second = 1, seconds = 1, min = 60, minute = 60, minutes = 60, hour = 3600, hours = 3600, hr = 3600 }
+function S.TooltipDuration(name)
+  if tooltipDur[name] ~= nil then return tooltipDur[name] or nil end
+  local ok, info = API.Call("SpellInfo", name)
+  local id = ok and type(info) == "table" and Readable(info.spellID) and info.spellID
+  if not id then return nil end
+  local okD, text = API.Call("SpellDescription", id)
+  if not okD or not Readable(text) or type(text) ~= "string" or text == "" then return nil end
+  local best
+  for n, unit in text:gmatch("(%d+%.?%d*)%s*(%a+)") do
+    local mult = UNIT_SECONDS[unit:lower()]
+    local v = mult and tonumber(n) and tonumber(n) * mult
+    if v and v > 0 and (not best or v > best) then best = v end
+  end
+  tooltipDur[name] = best or false
+  return best
+end
+
+-- how long a buff or debuff lasts: learned (read), else from the tooltip; and which
+local function Duration(name)
+  local d = Mem().durations[name]
+  if d then return d, "learned" end
+  d = S.TooltipDuration(name)
+  if d then return d, "tooltip" end
+end
+S.Duration = Duration
+function S.Charged(name) return Mem().charged[name] or false end
 local lastHit = 0 -- anything that landed on you, or tried to (UNIT_COMBAT), for charged buffs
 
 -- a count on the aura (stacks or charges); a hidden one counts as a count
@@ -115,14 +156,14 @@ local function Counted(v) return v ~= nil and (not Readable(v) or (type(v) == "n
 local function Remember(name, present, aura)
   local expires = 0
   if aura and Readable(aura.expirationTime) and type(aura.expirationTime) == "number" then expires = aura.expirationTime end
-  if aura and Readable(aura.duration) and type(aura.duration) == "number" and aura.duration > 0 then buffDur[name] = aura.duration end
-  if aura and (Counted(aura.applications) or Counted(aura.charges)) then charged[name] = true end
+  if aura and Readable(aura.duration) and type(aura.duration) == "number" and aura.duration > 0 then Mem().durations[name] = aura.duration end
+  if aura and (Counted(aura.applications) or Counted(aura.charges)) then Mem().charged[name] = true end
   seen[name] = { present = present, at = GetTime(), expires = present and expires or nil }
 end
 
 -- a charged buff, and you've been hit since `t`: it may be used up
 local USED_UP = "it has charges, and you've been hit since"
-local function MaybeUsedUp(name, t) return charged[name] and lastHit > t end
+local function MaybeUsedUp(name, t) return Mem().charged[name] and lastHit > t end
 
 -- Is buff `name` on you? Returns true/false or nil (can't tell), how it knows ("aura", "cdm",
 -- "estimate", "unknown"), and a detail for the settings window. selfOnly: it's the rule's own spell.
@@ -135,13 +176,14 @@ function S.HasBuff(name, selfOnly)
   if v ~= nil then return v, "cdm" end
   local now, last, c = GetTime(), seen[name], castAt[name]
   if c and (not last or c >= last.at) then
-    local d = buffDur[name]
+    local d, from = Duration(name)
     if not d then return nil, "unknown", "cast, but how long it lasts isn't known yet" end
+    local src = from == "tooltip" and ", from its tooltip" or ""
     if now - c <= d then
       if MaybeUsedUp(name, c) then return nil, "unknown", USED_UP end
-      return true, "estimate", format("from your cast %d s ago (lasts %d s)", now - c, d)
+      return true, "estimate", format("from your cast %d s ago (lasts %d s%s)", now - c, d, src)
     end
-    return false, "estimate", format("your cast %d s ago has run out (lasts %d s)", now - c, d)
+    return false, "estimate", format("your cast %d s ago has run out (lasts %d s%s)", now - c, d, src)
   end
   if last then
     if last.present then
@@ -168,9 +210,9 @@ function S.Tracked(name) return FromCooldownManager(name) ~= nil end
 -- present = true/false, or nil if the game won't say; how = "exact" or "hidden"
 local function Query(unit, name, filter)
   if S.AurasLocked() then return nil end -- in combat: the game refuses (don't even ask)
-  if not (C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName) then return nil end
+  if not API.Has("AuraBySpellName") then return nil end
   if not UnitExists(unit) then return false, "exact" end
-  local ok, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, unit, name, filter)
+  local ok, aura = API.Call("AuraBySpellName", unit, name, filter)
   if not ok then return nil end
   if isSecret(aura) then return true, "hidden" end   -- hidden details, but it's there
   if aura == nil then return false, "exact" end
@@ -179,11 +221,11 @@ end
 
 -- your debuff casts, per target (its GUID, when the game shows it; else "current", forgotten when
 -- you change targets): dots[key][debuff] = { t = when, left = charges left }
-local dots, learnedDur = {}, {}
+local dots = {}
 local DEFAULT_DUR = 12
 local function TargetKey()
   if not UnitExists("target") then return nil end
-  local ok, guid = pcall(UnitGUID, "target")
+  local ok, guid = API.Call("UnitGUID", "target")
   if ok and Readable(guid) and type(guid) == "string" then return guid end
   return "current"
 end
@@ -193,7 +235,7 @@ end
 function S.TargetDebuff(name, mineOnly, dur)
   local filter = mineOnly and "HARMFUL|PLAYER" or "HARMFUL"
   local present, how, aura = Query("target", name, filter)
-  if aura and Readable(aura.duration) and aura.duration > 0 then learnedDur[name] = aura.duration end
+  if aura and Readable(aura.duration) and type(aura.duration) == "number" and aura.duration > 0 then Mem().durations[name] = aura.duration end
   if present ~= nil then return present, how end
   -- combat: Blizzard's Cooldown Manager follows debuffs you track there (Stormstrike...), exactly
   local cdm = FromCooldownManager(name)
@@ -202,9 +244,11 @@ function S.TargetDebuff(name, mineOnly, dur)
   if mineOnly then
     local key = TargetKey()
     if not key then return false, "exact" end -- (no target: nothing on it)
-    local lasts = (dur and dur > 0) and dur or learnedDur[name]
-    local assumed = not lasts
-    lasts = lasts or DEFAULT_DUR
+    -- how long: the row's own "lasts", else learned, else its tooltip's, else assumed
+    local lasts, from = dur, nil
+    if not (lasts and lasts > 0) then lasts, from = Duration(name) end
+    if not lasts then lasts, from = DEFAULT_DUR, "assumed" end
+    local note = (from == "tooltip" and ", from its tooltip") or (from == "assumed" and ", assumed") or ""
     local c = dots[key] and dots[key][name]
     if not c then
       if key == "current" then return nil, "unknown", "your casts can't be told apart per target here" end
@@ -213,9 +257,9 @@ function S.TargetDebuff(name, mineOnly, dur)
     local ago = GetTime() - c.t
     if c.left and c.left <= 0 then return false, "estimate", "its charges are used up" end
     if ago <= lasts then
-      return true, "estimate", format("from your cast %d s ago (lasts %d s%s)", ago, lasts, assumed and ", assumed" or "")
+      return true, "estimate", format("from your cast %d s ago (lasts %d s%s)", ago, lasts, note)
     end
-    return false, "estimate", format("your cast %d s ago has run out (lasts %d s%s)", ago, lasts, assumed and ", assumed" or "")
+    return false, "estimate", format("your cast %d s ago has run out (lasts %d s%s)", ago, lasts, note)
   end
   return nil, "unknown"
 end
@@ -239,20 +283,43 @@ function S.MyDebuff(name)
 end
 
 -- your casts: a debuff of yours lands on your current target (an estimate: the cast can miss)
-function S.NoteDebuffCast(name, charges)
-  local key = TargetKey()
+-- key: the target the cast went to (TargetKey), default your target now
+function S.NoteDebuffCast(name, charges, key)
+  key = key or TargetKey()
   if not key then return end
   dots[key] = dots[key] or {}
   dots[key][name] = { t = GetTime(), left = (charges and charges > 0) and charges or nil }
 end
--- a spell that uses the debuff up was cast: one charge gone (on your current target)
-function S.UseDebuffCharge(name)
-  local key = TargetKey()
+-- a spell that uses the debuff up was cast: one charge gone (on the target it went to)
+function S.UseDebuffCharge(name, key)
+  key = key or TargetKey()
   local c = key and dots[key] and dots[key][name]
   if c and c.left then c.left = c.left - 1 end
 end
 -- (records per GUID stay; the "current" ones belong to the old target)
-function S.OnTargetChanged() dots.current = nil; S.comboStale = true end
+local targetGen = 0
+function S.OnTargetChanged() dots.current = nil; S.comboStale = true; targetGen = targetGen + 1 end
+
+-- Where each of your casts went (1.18.0), from UNIT_SPELLCAST_SENT (unit, target name, castGUID,
+-- spellID), which comes before the cast lands: sent[castGUID] = { key = your target then (TargetKey),
+-- or false: it went to another unit (a mouseover / focus macro: the name isn't your target's);
+-- other = true: it went to a named unit that isn't you (a buff on someone else); gen }.
+-- Without it (hidden castGUID or name) the cast counts as before: on your target now, on you.
+local sent, nSent = {}, 0
+local function NamePart(n) return (n:match("^[^-]+")) end
+function S.OnSent(targetName, castGUID)
+  if not (Readable(castGUID) and castGUID) then return end
+  if nSent >= 50 then wipe(sent); nSent = 0 end
+  local named = Readable(targetName) and type(targetName) == "string" and targetName ~= "" and NamePart(targetName)
+  local key = TargetKey()
+  local okT, tn = API.Call("UnitName", "target")
+  local okP, pn = API.Call("UnitName", "player")
+  if named and key and okT and Readable(tn) and type(tn) == "string" and NamePart(tn) ~= named then key = false end
+  if named and not key then key = false end
+  local other = named and okP and Readable(pn) and type(pn) == "string" and NamePart(pn) ~= named or nil
+  sent[castGUID] = { key = key, other = other, gen = targetGen }
+  nSent = nSent + 1
+end
 -- out of combat the game answers directly again: old estimates can go
 function S.OnCombatEnd() wipe(dots) end
 
@@ -270,11 +337,6 @@ function S.AuraPresent(a, name, selfOnly)
   return S.HasBuff(name, selfOnly)
 end
 
----------------------------------------------------------------------------
--- A spell's current cast time (ms), as the game shows it on the tooltip: readable in combat,
--- and 0 while something makes it instant (Maelstrom Weapon at 5, Nature's Swiftness, Presence
--- of Mind, Shadow Trance...). nil when the game won't say.
----------------------------------------------------------------------------
 ---------------------------------------------------------------------------
 -- Health: "below / at or above N%" on you or your target.
 -- Out of combat health reads as numbers. In combat the game hides it; then the game itself
@@ -305,7 +367,6 @@ function S.StepCurve(mode, pct)
   curves[key] = ok and curve or false
   return ok and curve or nil
 end
--- (kept for callers of the earlier name)
 
 -- does a readable percent meet the mode?
 function S.Meets(mode, v, pct)
@@ -346,9 +407,9 @@ end
 function S.ManaPct(unit)
   if not UnitExists(unit) then return nil, "none" end
   local mana = (Enum and Enum.PowerType and Enum.PowerType.Mana) or 0
-  local okM, m = pcall(UnitPowerMax, unit, mana)
+  local okM, m = API.Call("PowerMax", unit, mana)
   if okM and Readable(m) and type(m) == "number" and m <= 0 then return nil, "nomana" end
-  local okP, p = pcall(UnitPower, unit, mana)
+  local okP, p = API.Call("Power", unit, mana)
   if okP and okM and Readable(p) and Readable(m) and type(p) == "number" and type(m) == "number" and m > 0 then
     return p / m * 100
   end
@@ -380,7 +441,7 @@ function S.OnComboTarget() S.comboStale = false end
 function S.PowerMax(kind)
   local p = S.POWER[kind]
   if not p then return nil end
-  local ok, m = pcall(UnitPowerMax, "player", p.type)
+  local ok, m = API.Call("PowerMax", "player", p.type)
   if ok and Readable(m) and type(m) == "number" and m > 0 then return m end
   return p.max
 end
@@ -392,13 +453,11 @@ function S.PowerAmount(kind)
   if not p then return nil, "unknown" end
   if kind == "combo" then
     if not UnitExists("target") then return 0 end
-    if GetComboPoints then
-      local ok, c = pcall(GetComboPoints, "player", "target")
-      if ok and Readable(c) and type(c) == "number" then return c end
-    end
+    local ok, c = API.Call("ComboPoints", "player", "target")
+    if ok and Readable(c) and type(c) == "number" then return c end
     if S.comboStale then return nil, "stale" end
   end
-  local ok, v = pcall(UnitPower, "player", p.type)
+  local ok, v = API.Call("Power", "player", p.type)
   if ok and Readable(v) and type(v) == "number" then return v end
   return nil, "hidden"
 end
@@ -408,13 +467,13 @@ function S.PowerReport()
   local lines = {}
   local function sec(t)
     local out = {}
-    if C_Secrets and C_Secrets.GetPowerTypeSecrecy then
-      local ok, lvl = pcall(C_Secrets.GetPowerTypeSecrecy, t)
+    if API.Has("PowerSecrecy") then
+      local ok, lvl = API.Call("PowerSecrecy", t)
       local names = { [0] = "never hidden", [1] = "always hidden", [2] = "hidden at times" }
       out[#out + 1] = ok and (names[lvl] or tostring(lvl)) or "?"
     end
-    if C_Secrets and C_Secrets.ShouldUnitPowerBeSecret then
-      local ok, v = pcall(C_Secrets.ShouldUnitPowerBeSecret, "player", t)
+    if API.Has("PowerSecret") then
+      local ok, v = API.Call("PowerSecret", "player", t)
       out[#out + 1] = ok and (v and "hidden now" or "readable now") or "?"
     end
     return table.concat(out, ", ")
@@ -423,15 +482,15 @@ function S.PowerReport()
   for _, k in ipairs({ "combo", "rage", "energy", "mana" }) do
     local t = (k == "mana") and mana or S.POWER[k].type
     local label = (k == "mana") and "mana" or S.POWER[k].label
-    local okV, v = pcall(UnitPower, "player", t)
+    local okV, v = API.Call("Power", "player", t)
     local val = (okV and Readable(v)) and tostring(v) or (okV and "hidden" or "error")
-    local okM, m = pcall(UnitPowerMax, "player", t)
+    local okM, m = API.Call("PowerMax", "player", t)
     local max = (okM and Readable(m)) and tostring(m) or (okM and "hidden" or "error")
     -- the game-side check: does a step curve come back, and does a frame take it?
     local check = "no curve support"
     local curve = S.StepCurve("atleast", 50)
-    if curve and UnitPowerPercent then
-      local okP, r = pcall(UnitPowerPercent, "player", t, false, curve)
+    if curve and API.Has("PowerPercent") then
+      local okP, r = API.Call("PowerPercent", "player", t, false, curve)
       if not okP then check = "the game refused: " .. tostring(r)
       elseif r == nil then check = "no answer"
       else
@@ -443,8 +502,8 @@ function S.PowerReport()
     local secrecy = sec(t)
     lines[#lines + 1] = format("%s: now %s / max %s; %sgame-side check: %s", label, val, max, secrecy ~= "" and (secrecy .. "; ") or "", check)
   end
-  if GetComboPoints then
-    local ok, c = pcall(GetComboPoints, "player", "target")
+  if API.Has("ComboPoints") then
+    local ok, c = API.Call("ComboPoints", "player", "target")
     lines[#lines + 1] = "combo points on your target: " .. (not UnitExists("target") and "no target" or
       (ok and (Readable(c) and tostring(c) or "hidden") or "error"))
       .. (S.comboStale and " (just changed target: not trusted until points change)" or "")
@@ -456,8 +515,8 @@ end
 -- a unit's health in percent, or nil when the game hides it (or there's no such unit)
 function S.HealthPct(unit)
   if not UnitExists(unit) then return nil, "none" end
-  local okH, h = pcall(UnitHealth, unit)
-  local okM, m = pcall(UnitHealthMax, unit)
+  local okH, h = API.Call("Health", unit)
+  local okM, m = API.Call("HealthMax", unit)
   if okH and okM and Readable(h) and Readable(m) and type(h) == "number" and type(m) == "number" and m > 0 then
     return h / m * 100
   end
@@ -465,14 +524,16 @@ function S.HealthPct(unit)
 end
 
 function S.IsDead(unit)
-  if not UnitIsDeadOrGhost then return false end
-  local ok, d = pcall(UnitIsDeadOrGhost, unit)
+  local ok, d = API.Call("Dead", unit)
   return ok and Readable(d) and d and true or false
 end
 
+-- A spell's current cast time (ms), as the game shows it on the tooltip: readable in combat,
+-- and 0 while something makes it instant (Maelstrom Weapon at 5, Nature's Swiftness, Presence
+-- of Mind, Shadow Trance...). nil when the game won't say.
 function S.CastTime(name)
-  if not (name and C_Spell and C_Spell.GetSpellInfo) then return nil end
-  local ok, info = pcall(C_Spell.GetSpellInfo, name)
+  if not name then return nil end
+  local ok, info = API.Call("SpellInfo", name)
   if not ok or type(info) ~= "table" then return nil end
   local okT, ct = pcall(function() return info.castTime end)
   if not okT or type(ct) ~= "number" or isSecret(ct) then return nil end
@@ -506,11 +567,8 @@ local R = ns.Result
 
 -- Castable (known, enough mana); for an item, usable (you have it and can use it now).
 function S.Usable(name, item)
-  local fn
-  if item then fn = (C_Item and C_Item.IsUsableItem) or IsUsableItem
-  else fn = (C_Spell and C_Spell.IsSpellUsable) or IsUsableSpell end
-  if not fn then return R.UNKNOWN, "this client can't tell if it's usable" end
-  local ok, usable = pcall(fn, item or name)
+  local ok, usable = API.Call(item and "ItemUsable" or "SpellUsable", item or name)
+  if ok == nil then return R.UNKNOWN, "this client can't tell if it's usable" end
   if not ok then return R.ERROR, "the game couldn't check if it's usable" end
   if isSecret(usable) then return R.GATED, nil, { kind = "bool", v = usable } end
   if usable then return R.TRUE end
@@ -522,16 +580,15 @@ end
 -- by the hidden "on cooldown" flag (open when it's off); the global cooldown then counts too.
 function S.Ready(name, item)
   if item then
-    local fn = (C_Container and C_Container.GetItemCooldown) or GetItemCooldown
-    if not fn then return R.UNKNOWN, "this client can't read item cooldowns" end
-    local ok, start, duration = pcall(fn, item)
+    local ok, start, duration = API.Call("ItemCooldown", item)
+    if ok == nil then return R.UNKNOWN, "this client can't read item cooldowns" end
     if not ok then return R.ERROR, "the game couldn't read its cooldown" end
     if not (Readable(start) and Readable(duration)) then return R.UNKNOWN, "its cooldown is hidden" end
     if start and start > 0 and duration and duration > 1.5 then return R.FALSE, "on cooldown" end
     return R.TRUE
   end
-  if not (C_Spell and C_Spell.GetSpellCooldown) then return R.UNKNOWN, "this client can't read cooldowns" end
-  local ok, info = pcall(C_Spell.GetSpellCooldown, name)
+  local ok, info = API.Call("SpellCooldown", name)
+  if ok == nil then return R.UNKNOWN, "this client can't read cooldowns" end
   if not ok then return R.ERROR, "the game couldn't read its cooldown" end
   if type(info) ~= "table" then return R.UNKNOWN, "the game doesn't know this spell's cooldown" end
   local active, gcd = info.isActive, info.isOnGCD
@@ -544,8 +601,8 @@ end
 
 -- You have control of your character (not stunned, feared, charmed...).
 function S.HasControl()
-  if not HasFullControl then return R.UNKNOWN, "this client can't tell" end
-  local ok, v = pcall(HasFullControl)
+  local ok, v = API.Call("FullControl")
+  if ok == nil then return R.UNKNOWN, "this client can't tell" end
   if not ok then return R.ERROR, "the game couldn't tell" end
   if isSecret(v) then return R.GATED, nil, { kind = "bool", v = v } end
   if v then return R.TRUE end
@@ -553,7 +610,8 @@ function S.HasControl()
 end
 
 function S.InCombat()
-  local ok, v = pcall(UnitAffectingCombat, "player")
+  local ok, v = API.Call("InCombat", "player")
+  if ok == nil then return R.UNKNOWN, "this client can't tell" end
   if not ok then return R.ERROR, "the game couldn't tell" end
   if isSecret(v) then return R.GATED, nil, { kind = "bool", v = v } end
   if v then return R.TRUE end
@@ -572,11 +630,21 @@ function S.Flagged(name) return flagged[name] and true or false end
 
 -- You cast a spell: noted for estimates (a buff of that name may be on you now, a debuff of yours
 -- that some rule watches may be on your target now). A cast doesn't prove the aura landed.
-function S.OnCast(spellID)
+function S.OnCast(spellID, castGUID)
   local n = Readable(spellID) and ns.SpellName(spellID)
   if not n then return end
-  castAt[n] = GetTime()
-  if not ns.db then return end
+  local to = Readable(castGUID) and castGUID and sent[castGUID]
+  if to then sent[castGUID] = nil; nSent = nSent - 1 end
+  -- the target it went to: as sent (a "current" target counts only if you haven't changed target)
+  local key
+  if to then
+    key = to.key
+    if key == "current" and to.gen ~= targetGen then key = false end
+  else
+    key = TargetKey()
+  end
+  if not (to and to.other) then castAt[n] = GetTime() end -- (not a buff you put on someone else)
+  if not ns.db or not key then return end
   for _, r in ipairs(ns.db.rules) do
     for _, a in ipairs(r.auras or {}) do
       if a.unit == "target" and a.kind == "debuff" then
@@ -585,11 +653,11 @@ function S.OnCast(spellID)
         -- a spell that uses it up (e.g. Lightning Bolt using up Stormstrike's bonus)
         if charges > 0 and dn ~= n then
           for _, used in ipairs(ns.AuraUsedBy(r, a)) do
-            if used == n then S.UseDebuffCharge(dn) end
+            if used == n then S.UseDebuffCharge(dn, key) end
           end
         end
         -- you applied it
-        if dn == n and UnitExists("target") then S.NoteDebuffCast(n, charges) end
+        if dn == n then S.NoteDebuffCast(n, charges, key) end
       end
     end
   end

@@ -6,6 +6,7 @@ local G = {}
 ns.Glow = G
 local S = ns.State
 local isSecret = ns.isSecret
+local API = ns.API
 
 local BAR_PREFIXES = {
   "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarRightButton",
@@ -61,13 +62,18 @@ end
 
 -- The spell (or item) name on a button: spells, items, and macros that cast a spell or use an item.
 local slotCache = {}
-local function ButtonSpell(b)
+local function ButtonAction(b)
   local action = b.action or (b.CalculateAction and b:CalculateAction()) or (b.GetAttribute and b:GetAttribute("action"))
   if not action or isSecret(action) then return nil end
+  return action
+end
+local function ButtonSpell(b)
+  local action = ButtonAction(b)
+  if not action then return nil end
   local cached = slotCache[action]
   if cached ~= nil then return cached or nil end
-  local kind, id, subType = GetActionInfo(action)
-  if isSecret(kind) or isSecret(id) then return nil end
+  local ok, kind, id, subType = API.Call("ActionInfo", action)
+  if not ok or isSecret(kind) or isSecret(id) then return nil end
   local name
   if kind == "spell" then
     name = ns.SpellName(id)
@@ -78,14 +84,14 @@ local function ButtonSpell(b)
     -- newer clients hand back the spell the macro casts (subType "spell"); older ones the
     -- macro's index, to ask which spell it casts
     if subType == "spell" then name = ns.SpellName(id) end
-    if not name and GetMacroSpell then
-      local ok, sid = pcall(GetMacroSpell, id)
-      if ok and not isSecret(sid) then name = ns.SpellName(sid) end
+    if not name then
+      local okS, sid = API.Call("MacroSpell", id)
+      if okS and not isSecret(sid) then name = ns.SpellName(sid) end
     end
     if not name and subType == "item" then name = ns.ItemName(id) end
-    if not name and GetMacroItem then -- (a macro that uses an item: /use Healing Potion)
-      local ok, iname = pcall(GetMacroItem, id)
-      if ok and not isSecret(iname) and type(iname) == "string" then name = iname end
+    if not name then -- (a macro that uses an item: /use Healing Potion)
+      local okI, iname = API.Call("MacroItem", id)
+      if okI and not isSecret(iname) and type(iname) == "string" then name = iname end
     end
     return name -- not cached: a macro with [conditions] can switch spells at any moment
   end
@@ -93,6 +99,28 @@ local function ButtonSpell(b)
   return name
 end
 function G.ForgetSlots() wipe(slotCache) end
+
+-- /pt buttons: every shown button with a macro, or a rule's spell or item: what it holds and what
+-- Proc This! reads it as right now (macros follow their [conditions])
+function G.ButtonReport()
+  local ruled, lines = {}, {}
+  for _, r in ipairs(ns.db.rules) do local n = ns.RuleSpellName(r); if n then ruled[n] = true end end
+  for _, b in ipairs(Buttons()) do
+    local action = b:IsVisible() and ButtonAction(b)
+    if action then
+      local ok, kind = API.Call("ActionInfo", action)
+      kind = ok and not isSecret(kind) and kind or nil
+      local name = ButtonSpell(b)
+      if kind == "macro" or (name and ruled[name]) then
+        lines[#lines + 1] = format("%s (slot %d): %s%s%s", b:GetName() or "?", action, kind or "?",
+          kind == "macro" and (" -> " .. (name or "|cffff6060nothing Proc This! can read|r")) or (" " .. (name or "?")),
+          (name and ruled[name]) and " |cff60ff60(has a rule)|r" or "")
+      end
+    end
+  end
+  if #lines == 0 then lines[1] = "no shown buttons with a macro or a rule's spell." end
+  return lines
+end
 
 -- The glow sits inside a chain of "gate" frames on the button. Alphas multiply, so each gate
 -- is one more condition: open (1) or shut (0). Gates are how conditions the game hides
@@ -182,12 +210,10 @@ local function SetGate(g, gate)
     -- the game turns the hidden health / mana into 1 (condition holds) or 0 through the curve
     local ok, v
     if gate.what == "health" then
-      if not UnitHealthPercent then return false end
-      ok, v = pcall(UnitHealthPercent, gate.unit, true, gate.curve)
+      ok, v = API.Call("HealthPercent", gate.unit, true, gate.curve)
     else
-      if not UnitPowerPercent then return false end
       local pt = gate.powerType or ((Enum and Enum.PowerType and Enum.PowerType.Mana) or 0)
-      ok, v = pcall(UnitPowerPercent, gate.unit, pt, false, gate.curve)
+      ok, v = API.Call("PowerPercent", gate.unit, pt, false, gate.curve)
     end
     if not ok or v == nil then return false end
     return (pcall(g.SetAlpha, g, v))
@@ -450,7 +476,7 @@ function G.CheckAura(rule, a)
       if S.OpMeets(op, v, pct) then return R.TRUE end
       return R.FALSE, format("%s at %d%% %s (needs %s %d%%)", who, math.floor(v + 0.5), what, words, pct)
     end
-    local api = (what == "health") and UnitHealthPercent or UnitPowerPercent
+    local api = API.Has((what == "health") and "HealthPercent" or "PowerPercent")
     local gs = {}
     for _, st in ipairs(S.OpSteps(op, pct, 1)) do
       local curve = S.StepCurve(st[1], st[2])
@@ -473,7 +499,7 @@ function G.CheckAura(rule, a)
       return R.FALSE, format("%d %s (needs %s %d)", v, p.label, words, n)
     end
     if why == "stale" then return R.UNKNOWN, "combo points unknown since you changed target (until you gain one)" end
-    if not UnitPowerPercent then return R.UNKNOWN, format("your %s are hidden, and this client can't check them", p.label) end
+    if not API.Has("PowerPercent") then return R.UNKNOWN, format("your %s are hidden, and this client can't check them", p.label) end
     local gs = {}
     for _, st in ipairs(S.OpSteps(op, n, 100 / max)) do
       local curve = S.StepCurve(st[1], st[2])
@@ -712,10 +738,11 @@ function G.Init()
     "PLAYER_REGEN_DISABLED", "ACTIONBAR_SLOT_CHANGED", "UPDATE_MACROS", "ACTIONBAR_PAGE_CHANGED",
     "PLAYER_ENTERING_WORLD", "SPELLS_CHANGED", "PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED",
     "LOSS_OF_CONTROL_ADDED", "LOSS_OF_CONTROL_UPDATE",
-    "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "PLAYER_TARGET_CHANGED", "COMBO_TARGET_CHANGED" }) do
+    "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "PLAYER_TARGET_CHANGED", "COMBO_TARGET_CHANGED",
+    "MODIFIER_STATE_CHANGED" }) do -- (a macro with [mod] conditions shows another spell)
     pcall(ev.RegisterEvent, ev, e)
   end
-  for _, e in ipairs({ "UNIT_POWER_FREQUENT", "UNIT_POWER_UPDATE", "UNIT_COMBAT", "UNIT_SPELLCAST_SUCCEEDED" }) do
+  for _, e in ipairs({ "UNIT_POWER_FREQUENT", "UNIT_POWER_UPDATE", "UNIT_COMBAT", "UNIT_SPELLCAST_SENT", "UNIT_SPELLCAST_SUCCEEDED" }) do
     pcall(ev.RegisterUnitEvent, ev, e, "player")
   end
   pcall(ev.RegisterUnitEvent, ev, "UNIT_AURA", "player", "target")
@@ -728,8 +755,10 @@ function G.Init()
   ev:SetScript("OnEvent", function(_, event, a1, a2, a3, a4, a5)
     if event == "UNIT_COMBAT" then
       S.OnUnitCombat(a2, a3, a4, a5)
+    elseif event == "UNIT_SPELLCAST_SENT" then
+      S.OnSent(a2, a3)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-      S.OnCast(a3)
+      S.OnCast(a3, a2)
     elseif event == "PLAYER_TARGET_CHANGED" then
       S.OnTargetChanged()
     elseif event == "PLAYER_REGEN_ENABLED" then
