@@ -13,7 +13,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 | 1 | Condition engine reliability | Done in 1.16.0, verified in game, reviewed |
 | 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | Done in 1.17.0, verified in game, reviewed |
 | 3 | Spell, item and aura tracking (compatibility layer, macros) | Done in 1.18.0, verified in game, reviewed |
-| 4 | Button discovery and rendering (providers, lifecycle, profiling) | **Done in 1.19.0, waiting for in-game validation and review** |
+| 4 | Button discovery and rendering (providers, lifecycle, profiling) | **Done in 1.19.0, verified in game, waiting for review** |
 | 5 | User experience (live status, priority, templates, import / export) | Not started |
 | 6 | Diagnostics and release readiness | Not started |
 
@@ -384,7 +384,13 @@ Results (1.19.0 test build, Shaman):
 - 2 (the two macros reading as nothing): they're on the right-hand bar, which the game reports as
   shown (`IsVisible`) but isn't on screen (faded or moved off). Not checked further: they hold no
   rule's spell.
-- 1, 4, 5: pending.
+- 4: pass. Colour, size and "while it's on" changed while glowing in combat: the glow follows at
+  once.
+- 1: glows as in 1.18.0 throughout the tests; no Lua errors reported.
+- 5: not applicable (EllesmereUI not loaded on this character); covered by the offline test of a
+  dropped button.
+
+Milestone 4 verified in game; awaiting review before Milestone 5.
 
 ## Known limitations
 
