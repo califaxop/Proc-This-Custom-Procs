@@ -108,9 +108,6 @@ end
 
 -- For the settings window: can this buff/debuff be followed in combat?
 function S.Tracked(name) return FromCooldownManager(name) ~= nil end
-function S.BuffTracked(name)
-  return FromCooldownManager(name) ~= nil
-end
 
 ---------------------------------------------------------------------------
 -- Debuffs and buffs on your target, debuffs on you
@@ -185,11 +182,6 @@ function S.OnTargetChanged() wipe(castAt); S.comboStale = true end
 ---------------------------------------------------------------------------
 -- One aura condition of a rule (see ns.NEW_AURA): on you or your target, a buff or a debuff.
 ---------------------------------------------------------------------------
-local function AuraFilter(a)
-  local f = (a.kind == "debuff") and "HARMFUL" or "HELPFUL"
-  if a.unit == "target" and a.mine then f = f .. "|PLAYER" end
-  return f
-end
 
 -- Is it there? true/false, or nil when the game won't say (combat, not in the Cooldown Manager);
 -- plus how it was decided: "aura", "exact", "hidden", "cdm", "your cast", "guess", "unknown".
@@ -238,7 +230,6 @@ function S.StepCurve(mode, pct)
   return ok and curve or nil
 end
 -- (kept for callers of the earlier name)
-function S.HealthCurve(below, pct) return S.StepCurve(below and "below" or "atleast", pct) end
 
 -- does a readable percent meet the mode?
 function S.Meets(mode, v, pct)
