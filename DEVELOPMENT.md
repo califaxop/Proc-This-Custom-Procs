@@ -327,7 +327,10 @@ Results (1.18.0 test build, Shaman):
 - 4: pass. After a `/reload`, Lightning Shield not tracked, cast in combat: "Not glowing: Lightning
   Shield is on you (estimate: from your cast 4 s ago (lasts 600 s, from its tooltip))" (1.17.0:
   "can't tell").
-- 1, 5, 6: pending.
+- 5 (Flame Shock tracked in the Cooldown Manager): pass. Cast at a second mob through a mouseover
+  macro: your target "not on your target (from the Cooldown Manager)". The estimate path (not
+  tracked) is still to check, with two mobs of different names.
+- 1, 6: pending.
 
 ## Known limitations
 
