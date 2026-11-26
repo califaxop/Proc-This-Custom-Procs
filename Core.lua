@@ -28,7 +28,7 @@ ns.NEW_RULE = { enabled = true, spell = "", auras = {},
   melee = false, usable = true, ready = true, control = true, combat = false, proc = false,
   -- its look
   color = "gold", colorCustom = { 1, 1, 1 }, startStyle = "shine", motion = "steady", scale = 1.4, alpha = 1,
-  glowType = "blizzard" } -- (EllesmereUI mode: one of its glow styles, see ns.EUI_GLOWS)
+  glowType = "blizzard" } -- (with EllesmereUI: one of its glow styles, see ns.EUI_GLOWS)
 ns.NEW_AURA = { name = "", unit = "player", kind = "buff", mode = "present", mine = true,
   dur = 0, charges = 0, usedBy = "",
   group = 1 }  -- which group it's in (see ns.NormalizeGroups)
@@ -58,7 +58,6 @@ ns.GLOW_COLORS = {
 -- Other UIs, found by themselves: each one's "mode" is on while it's installed (and the player hasn't
 -- turned it off in Settings).
 function ns.HasEllesmere() return type(EllesmereUI) == "table" and type(EllesmereUI.Glows) == "table" end
-function ns.EllesmereMode() return ns.HasEllesmere() end -- whenever EllesmereUI is installed
 function ns.HasFlare() return ns.UI and ns.UI.FlareBorder and ns.UI.FlareBorder() ~= nil end
 -- EllesmereUI's glow styles (EllesmereUI.Glows.STYLES, matched by name): { key, label, its name }
 ns.EUI_GLOWS = {
@@ -69,7 +68,7 @@ ns.EUI_GLOWS = {
 }
 -- a rule's EllesmereUI glow style: its index in EllesmereUI.Glows.STYLES, or nil (Proc This!'s own glow)
 function ns.EUIStyleIndex(rule)
-  if not ns.EllesmereMode() then return nil end
+  if not ns.HasEllesmere() then return nil end
   local key = rule and rule.glowType
   local want
   for _, g in ipairs(ns.EUI_GLOWS) do if g[1] == key then want = g[3] end end
@@ -263,8 +262,6 @@ function ns.LoadDB()
   for k, v in pairs(ns.DEFAULTS) do
     if ProcThisDB[k] == nil then ProcThisDB[k] = Copy(v) end
   end
-  -- no mode settings any more: EllesmereUI / FlareUI modes are on whenever they're installed
-  ProcThisDB.euiMode, ProcThisDB.flareStyle = nil, nil
   -- before 1.15.0 every character shared one list: kept, for each character's first login
   if ProcThisDB.rules ~= nil then
     if ProcThisDB.sharedRules == nil then ProcThisDB.sharedRules = ProcThisDB.rules end

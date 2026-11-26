@@ -180,11 +180,11 @@ local function BuildEditor(p)
   e.lSizeL = label("Size")
   e.size = UI.Toggle(p, 140, e.sizeOpts, lookField("scale"), function() ns.Glow.Restyle(); ui.Refresh() end,
     "How big the glow is around the button. Click to switch.")
-  -- EllesmereUI mode: its glow styles too
+  -- with EllesmereUI: its glow styles too
   e.lGlowL = label("Glow")
   e.glowType = UI.Toggle(p, 140, ns.EUI_GLOWS, { function() local r = Rule(); return r and r.glowType or "blizzard" end,
     function(v) local r = Rule(); if r then r.glowType = v end end }, function() ns.Glow.Restyle(); ui.Refresh() end,
-    "EllesmereUI mode: Proc This!'s glow, or one of EllesmereUI's (pixel lines, autocast shine, GCD ants...). Click to switch. " ..
+    "With EllesmereUI: Proc This!'s glow, or one of EllesmereUI's (pixel lines, autocast shine, GCD ants...). Click to switch. " ..
     "On EllesmereUI's shaped buttons it's always its shape glow.")
   e.lookParts[#e.lookParts + 1] = e.glowType
   e.lAlphaL = label("Intensity")
@@ -212,7 +212,7 @@ local function BuildEditor(p)
   e.RefreshLook = function()
     for _, w in ipairs({ e.color, e.style, e.motion, e.size, e.alpha, e.glowType }) do w.Refresh() end
     -- an EllesmereUI glow style has no start animation or size of ours
-    local own = not (ns.EllesmereMode() and ns.EUIStyleIndex(Rule()))
+    local own = not (ns.HasEllesmere() and ns.EUIStyleIndex(Rule()))
     e.style.SetActive(own); e.size.SetActive(own)
   end
 
@@ -459,7 +459,7 @@ local function BuildEditor(p)
     pair(e.lStyleL, e.style, 0); pair(e.lMotionL, e.motion, 250)
     y = y - 28
     pair(e.lSizeL, e.size, 0); pair(e.lAlphaL, e.alpha, 250)
-    local eui = ns.EllesmereMode()
+    local eui = ns.HasEllesmere()
     e.lGlowL:SetShown(eui and Rule() ~= nil); e.glowType:SetShown(eui and Rule() ~= nil)
     if eui then y = y - 28; pair(e.lGlowL, e.glowType, 0) end
     y = y - 40
@@ -794,7 +794,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     if not ok then ns.Print("start-up error: " .. tostring(e)) end
     -- say once when another UI is found and its mode turned on
     ns.db.seenUI = ns.db.seenUI or {}
-    if ns.EllesmereMode() and not ns.db.seenUI.eui then
+    if ns.HasEllesmere() and not ns.db.seenUI.eui then
       ns.db.seenUI.eui = true
       ns.Print("EllesmereUI found: Proc This! glows on its bars, and its glow styles are in each rule's Look.")
     end

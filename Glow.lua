@@ -20,7 +20,7 @@ local EAB_BARS = { -- first slot -> its bar's settings key
   { 1, "MainBar" }, { 13, "Bar9" }, { 25, "Bar4" }, { 37, "Bar5" }, { 49, "Bar3" }, { 61, "Bar2" },
   { 109, "Bar10" }, { 145, "Bar6" }, { 157, "Bar7" }, { 169, "Bar8" },
 }
-local function HasEllesmere() return ns.EllesmereMode() end
+local function HasEllesmere() return ns.HasEllesmere() end
 
 local buttons, builtAt
 local function Buttons()
@@ -321,7 +321,7 @@ local function Show(b, gates, rule)
   glow:SetAlpha(alpha)
   -- colour (and the shine's, so its flare matches)
   local r, gg, bb = ns.RuleGlowRGB(rule)
-  -- EllesmereUI mode: on its shaped buttons, its shape glow; elsewhere, the rule's EllesmereUI glow style
+  -- with EllesmereUI: on its shaped buttons, its shape glow; elsewhere, the rule's EllesmereUI glow style
   -- if it has one. Both drawn inside the same gates, so the conditions work the same.
   local mask, border = EllesmereShape(b)
   local euiIdx = (not mask) and ns.EUIStyleIndex(rule) or nil
@@ -376,7 +376,7 @@ end
 -- style or size changed: restart every glow so the change shows
 function G.Restyle()
   for _, b in ipairs(Buttons()) do Hide(b) end
-  buttons = nil -- (look again: EllesmereUI mode adds or drops its buttons)
+  buttons = nil -- (look again: EllesmereUI adds or drops its buttons)
   G.Update()
 end
 
