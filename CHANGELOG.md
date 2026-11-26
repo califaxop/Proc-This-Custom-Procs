@@ -1,6 +1,17 @@
 # Changelog
 
-## 1.20.0 (Milestone 5: user experience)
+## 2.0.0 (the development plan: Milestones 1-6)
+
+The first release of the development plan. 1.16.0 to 1.20.0 below were test builds of its
+milestones (not published); 2.0.0 is all of them, plus Milestone 6:
+
+- New: `/pt report` puts everything a bug report needs into one text to copy: version and client,
+  what the game lets Proc This! see right now, the buttons, each rule's status, the last errors
+  caught, and your rules.
+- New: `/pt debug` prints each rule's status changes as they happen.
+- Errors while working out a rule are kept (for `/pt report`) besides showing as "error".
+
+## 1.20.0 (Milestone 5: user experience; test build)
 
 - Each rule in the list shows its live status as a dot (green glowing, yellow the game decides,
   orange can't tell, red error); hover it for why.
@@ -11,7 +22,7 @@
   someone sent you. Imported text is checked field by field and never run.
 - Fixed: with no target, a "debuff missing on target" rule glowed.
 
-## 1.19.0 (Milestone 4: button discovery and rendering)
+## 1.19.0 (Milestone 4: button discovery and rendering; test build)
 
 - Glows on action bars built on LibActionButton (Bartender4, ElvUI and others), besides Blizzard's
   and EllesmereUI's.
@@ -23,7 +34,7 @@
 - New: `/pt perf` shows how long glow updates take; `/pt buttons` starts with how many buttons each
   kind of bar has.
 
-## 1.18.0 (Milestone 3: spell, item and aura tracking)
+## 1.18.0 (Milestone 3: spell, item and aura tracking; test build)
 
 - Fixed: a debuff cast at another unit (a mouseover or focus macro) counted as on your target.
 - Fixed: switching targets while casting put the debuff on the new target.
@@ -36,7 +47,7 @@
   `/pt api` (which game functions this client has).
 - Every game function is read through one compatibility layer, always protected.
 
-## 1.17.0 (Milestone 2: advanced condition evaluation)
+## 1.17.0 (Milestone 2: advanced condition evaluation; test build)
 
 - Conditions the game hides now work when joined by OR ("any one" groups, rules joined by OR):
   the glow shows when any of them holds. Before, two or more of them gave "can't tell" and no glow.
@@ -51,7 +62,7 @@
 - A loop between rules names them (A > B > A), and the rule picker no longer offers a rule that
   would make one.
 
-## 1.16.0 (Milestone 1: condition engine reliability)
+## 1.16.0 (Milestone 1: condition engine reliability; test build)
 
 - Every condition now answers yes, no, "the game decides" (hidden values), "can't tell" or
   "error". "Can't tell" and "error" never light a glow, and never count as yes or as no.

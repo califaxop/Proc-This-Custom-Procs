@@ -792,7 +792,8 @@ local function PageHelp(page)
   para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
     "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      " ..
     "/pt spell <spell>  its cast time, how long it lasts, charges      /pt buttons  what each macro button reads as now      " ..
-    "/pt power  what's readable of your power      /pt perf  how long glow updates take      /pt api  which game functions this client has")
+    "/pt power  what's readable of your power      /pt perf  how long glow updates take      /pt api  which game functions this client has      " ..
+    "/pt debug  print each rule's status changes      /pt report  a report to paste into a bug report")
   sec("Feedback")
   local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
     UI.ShowLink("ProcThisLinkWindow", "Proc This!: bugs and ideas", "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose")
@@ -832,7 +833,8 @@ end
 -- Share rules: export as text (this rule with the rules it uses, or all) or import text someone
 -- sent (Share.lua checks every field; nothing in it is run)
 local share
-function ns.OpenShare()
+-- fill: text to put in the box at once (a /pt report), with its note
+function ns.OpenShare(fill, note)
   if not share then
     share = UI.Popup("ProcThisShare", 580, 196)
     local t = UI.Text(share, "title", "Share rules"); t:SetPoint("TOPLEFT", 20, -18)
@@ -841,10 +843,11 @@ function ns.OpenShare()
     box:SetMaxLetters(0)
     box:SetPoint("TOPLEFT", 20, -52)
     local msg = UI.Text(share, "note", ""); msg:SetPoint("TOPLEFT", 20, -82); msg:SetWidth(540)
-    local function Show(str)
+    local function Show(str, why)
       text = str; box:SetText(str); box:SetFocus(); box:HighlightText()
-      msg:SetText("Copied into the box: press Ctrl+C to copy it, then paste it where you like.")
+      msg:SetText(why or "Copied into the box: press Ctrl+C to copy it, then paste it where you like.")
     end
+    share.Show = Show
     local one = UI.Button(share, "Export this rule", 140, function()
       local r = ns.db.rules[selected]
       if r then Show(ns.Share.Export(ns.db.rules, r)) end
@@ -870,6 +873,39 @@ function ns.OpenShare()
   end
   share.Reset()
   share:Show()
+  if fill then share.Show(fill, note) end
+end
+
+-- /pt report: what a bug report needs, as one text to copy: the version and client, what the game
+-- lets Proc This! see right now, the buttons, the speed, each rule's status, the last errors
+-- caught, and the rules themselves (as Share text)
+local function Report()
+  local L = {}
+  local function add(...) L[#L + 1] = format(...) end
+  local okV, version = ns.API.Call("AddOnMetadata", ns.name, "Version")
+  local okB, build, number, _, toc = ns.API.Call("BuildInfo")
+  add("Proc This! %s; client %s (%s), interface %s", okV and tostring(version) or "?",
+    okB and tostring(build) or "?", okB and tostring(number) or "?", okB and tostring(toc) or "?")
+  local _, class = UnitClass("player")
+  add("%s, %s; in combat: %s; auras hidden now: %s; Cooldown Manager: %s", ns.CharKey(), tostring(class),
+    InCombatLockdown() and "yes" or "no", ns.State.AurasLocked() and "yes" or "no",
+    (GetCVarBool and GetCVarBool("cooldownViewerEnabled")) and "on" or "off")
+  add("%s", ns.Buttons.Report())
+  local missing = {}
+  for _, l in ipairs(ns.API.Report()) do if l:find("not on this client", 1, true) then missing[#missing + 1] = l:match("^(%w+)") end end
+  add("game functions: %s", #missing == 0 and "all present" or ("missing " .. table.concat(missing, ", ")))
+  ns.Glow.NewPass()
+  for i, r in ipairs(ns.db.rules) do
+    local st, why = ns.Glow.Evaluate(r)
+    add("rule %d %s: %s%s%s", i, ns.RuleLabel(r), r.enabled and st or "off", why and (" - " .. why) or "",
+      ns.Glow.CountButtons(r) > 0 and "" or " (not on a shown button)")
+  end
+  if #ns.Glow.errors == 0 then add("errors caught: none") end
+  for _, e in ipairs(ns.Glow.errors) do add("error (%s, x%d, %.0f s ago): %s", e.where, e.n, GetTime() - e.at, e.msg) end
+  add("rules: %s", ns.Share.Export(ns.db.rules))
+  -- one line in the box (an edit box of one line), " // " between parts; a stray | doubled (the
+  -- edit box's way of showing one, rather than starting a colour code)
+  return (table.concat(L, " // "):gsub("|", "||"))
 end
 
 function ns.OpenOptions()
@@ -979,6 +1015,17 @@ SlashCmdList.PROCTHIS = function(msg)
   if spellArg then ShowSpell(spellArg); return end
   if (msg or ""):lower():match("^api") then for _, l in ipairs(ns.API.Report()) do ns.Print(l) end return end
   if (msg or ""):lower():match("^button") then for _, l in ipairs(ns.Glow.ButtonReport()) do ns.Print(l) end return end
+  if (msg or ""):lower():match("^debug") then
+    ns.Glow.debug = not ns.Glow.debug
+    ns.Print("debug " .. (ns.Glow.debug and "on: each rule's status change is printed here (/pt debug again to stop)." or "off."))
+    return
+  end
+  if (msg or ""):lower():match("^report") then
+    local ok, text = pcall(Report)
+    if not ok then ns.Print("report failed: " .. tostring(text)); return end
+    ns.OpenShare(text, "Your report is in the box: press Ctrl+C and paste it into your bug report.")
+    return
+  end
   if (msg or ""):lower():match("^perf") then for _, l in ipairs(ns.Glow.PerfReport()) do ns.Print(l) end return end
   if (msg or ""):lower():match("^test") then ns.Glow.Test(3); return end
   if (msg or ""):lower():match("^aura") then ListAuras(); return end

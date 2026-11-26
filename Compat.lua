@@ -45,6 +45,9 @@ local FORMS = {
   { "ActionInfo", "GetActionInfo" },
   { "MacroSpell", "GetMacroSpell" },
   { "MacroItem", "GetMacroItem" },
+  -- the client (for /pt report)
+  { "BuildInfo", "GetBuildInfo" },
+  { "AddOnMetadata", "C_AddOns.GetAddOnMetadata", "GetAddOnMetadata" },
 }
 
 -- name -> { { "C_Spell", "IsSpellUsable" }, ... } and its forms' names, once

@@ -29,7 +29,7 @@ test or read it. `issecretvalue(v)` says whether it is.
 
 | API | Signature | Secret when | Use | Status |
 |---|---|---|---|---|
-| `C_Spell.GetSpellCooldown(spell)` | → SpellCooldownInfo { isActive, isOnGCD, ... } (nil: no such spell) | cooldowns restricted (`C_Secrets.ShouldCooldownsBeSecret`) | "Off cooldown": readable → TRUE / FALSE; hidden `isActive` → a gate (open when false) | Readable case: In use; hidden case: Docs only |
+| `C_Spell.GetSpellCooldown(spell)` | → SpellCooldownInfo { isActive, isOnGCD, ... } (nil: no such spell) | cooldowns restricted (`C_Secrets.ShouldCooldownsBeSecret`) | "Off cooldown": readable → TRUE / FALSE; hidden `isActive` → a gate (open when false) | Readable case: Verified in game (Flame Shock on the shared shock cooldown: "on cooldown"); hidden case: Docs only (never hidden solo) |
 | `C_Spell.IsSpellUsable(spell)` | → isUsable, insufficientPower | can be hidden | "Castable": hidden → a gate | In use (the hidden case: Inferred) |
 | `C_Item.IsUsableItem(item)` | → usable, noMana | — | items' "usable" | Docs |
 | `C_Container.GetItemCooldown(itemID)` | → start, duration, enable | — | items' "off cooldown" (hidden → UNKNOWN) | Docs |
@@ -37,8 +37,8 @@ test or read it. `issecretvalue(v)` says whether it is.
 | `C_Spell.GetSpellDescription(spellID)` (older: `GetSpellDescription`) | → text | — | a buff's or debuff's duration before it's ever read ("for 12 sec", "Lasts 10 min": the longest; English wording) | Verified in game (`/pt spell`: Lightning Shield 600 s, Flame Shock 12 s) |
 | `C_Spell.GetSpellName(id)`, `C_Item.GetItemNameByID`, `C_Item.GetItemInfoInstant` | — | — | names | In use |
 | `UNIT_SPELLCAST_SUCCEEDED` (unit, castGUID, spellID) | event | spellID can be hidden (then ignored) | your casts, for estimates | In use |
-| `UNIT_SPELLCAST_SENT` (unit, target name, castGUID, spellID) | event | the name or castGUID may be hidden (then the cast counts as before) | where a cast went: your target, another unit, you | Docs |
-| `MODIFIER_STATE_CHANGED` | event | — | macros with `[mod]` conditions: update at once | Docs |
+| `UNIT_SPELLCAST_SENT` (unit, target name, castGUID, spellID) | event | the name or castGUID may be hidden (then the cast counts as before) | where a cast went: your target, another unit, you | Verified in game (a mouseover Flame Shock wasn't counted on the target) |
+| `MODIFIER_STATE_CHANGED` | event | — | macros with `[mod]` conditions: update at once | Verified in game (`[mod:shift]` macro) |
 | `SPELL_ACTIVATION_OVERLAY_GLOW_SHOW / HIDE` (spellID) | events | — | "Proc" | In use |
 
 ## Units
@@ -63,6 +63,7 @@ test or read it. `issecretvalue(v)` says whether it is.
 | `C_CurveUtil.CreateCurve()`, `Enum.LuaCurveType.Step` | step curves for hidden health / power | In use (`/pt power` reports whether it works) |
 | `LibStub("LibActionButton-1.0", true).buttonRegistry` (button → true); a button's `_state_type`, `_state_action` | LibActionButton bars (Bartender4, ElvUI...): their buttons and action slots | Docs (the library's source); not seen on Forever yet |
 | `debugprofilestop()` | `/pt perf`: how long updates take, in ms | Verified in game (`/pt perf`) |
+| `GetBuildInfo()`, `C_AddOns.GetAddOnMetadata(addon, "Version")` (older: `GetAddOnMetadata`) | `/pt report`: the client and Proc This!'s version | Docs |
 | `ADDON_LOADED`, `PLAYER_ENTERING_WORLD` | look for buttons again (a bar addon came in) | In use |
 | `BAG_UPDATE_COOLDOWN` | an item's cooldown started or ended | Docs |
 | `GetActionInfo(slot)` | → kind, id, subType: what a button holds (macro subtype "spell" / "item") | In use |
@@ -77,5 +78,7 @@ test or read it. `issecretvalue(v)` says whether it is.
 - `/pt spell <spell>` (or `/pt cast`): its cast time now, how long it lasts and where that's from,
   whether it has charges.
 - `/pt buttons`: what each macro button (and each button with a rule's spell) reads as now.
-- `/pt api`: which form of each function this client has.
+- `/pt api`: which form of each function this client has (all 27 present on Forever, newest forms).
+- `/pt debug`: each rule's status changes, as they happen.
+- `/pt report`: all of the above that matters for a bug report, as one text.
 - The settings window's live status (per rule): each row's answer and its source.

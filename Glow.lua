@@ -533,6 +533,32 @@ end
 local pass, stack = {}, {}
 function G.NewPass() wipe(pass) end
 
+-- the last errors caught while working rules out (for /pt report): { at, where, message }; the
+-- same error again only counts up
+G.errors = {}
+function G.NoteError(where, msg)
+  msg = tostring(msg)
+  local last = G.errors[#G.errors]
+  if last and last.where == where and last.msg == msg then last.n = last.n + 1; last.at = GetTime(); return end
+  if #G.errors >= 10 then table.remove(G.errors, 1) end
+  G.errors[#G.errors + 1] = { at = GetTime(), where = where, msg = msg, n = 1 }
+end
+
+-- /pt debug: each rule's status change, printed as it happens (rules on shown buttons)
+G.debug = false
+local WORDS = { [R.TRUE] = "glowing", [R.GATED] = "the game decides", [R.FALSE] = "not glowing",
+  [R.UNKNOWN] = "can't tell", [R.ERROR] = "error" }
+local lastStatus = setmetatable({}, { __mode = "k" })
+local function Watch(rule, st, why)
+  if lastStatus[rule] == st then return end
+  local was = lastStatus[rule]
+  lastStatus[rule] = st
+  if G.debug and was then
+    ns.Print(format("%s: %s > %s%s", ns.RuleLabel(rule), WORDS[was] or was, WORDS[st] or st,
+      (why and st ~= R.TRUE) and (" (" .. why .. ")") or ""))
+  end
+end
+
 -- a reader's result, once per pass (same spell, same gate)
 local function Once(key, fn, ...)
   local v = pass[key]
@@ -555,7 +581,10 @@ function G.Evaluate(rule)
   stack[#stack + 1] = rule
   local ok, st, why, gates = pcall(Evaluate, rule)
   stack[#stack] = nil
-  if not ok then st, why, gates = R.ERROR, "error: " .. tostring(st), nil end
+  if not ok then
+    G.NoteError(ns.RuleLabel(rule), st)
+    st, why, gates = R.ERROR, "error: " .. tostring(st), nil
+  end
   pass[rule] = { st, why, gates }
   return st, why, gates
 end
@@ -667,7 +696,8 @@ function G.Update()
         if rule.enabled then plain[name] = { { rule = rule } } end
       else
         nRules = nRules + 1
-        local st, _, set = G.Evaluate(rule)
+        local st, why, set = G.Evaluate(rule)
+        Watch(rule, st, why)
         -- several rules for one spell: a plain yes wins (the first one's look); else every GATED
         -- rule's terms, in order (the game opens whichever holds); FALSE, UNKNOWN, ERROR never glow
         if st == R.TRUE then plain[name] = { { rule = rule } }

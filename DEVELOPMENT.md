@@ -15,7 +15,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 | 3 | Spell, item and aura tracking (compatibility layer, macros) | Done in 1.18.0, verified in game, reviewed |
 | 4 | Button discovery and rendering (providers, lifecycle, profiling) | Done in 1.19.0, verified in game, reviewed |
 | 5 | User experience (live status, priority, templates, import / export) | Done in 1.20.0, verified in game |
-| 6 | Diagnostics and release readiness | Not started |
+| 6 | Diagnostics and release readiness | **Done in 2.0.0 (the release of 1-6), waiting for in-game validation** |
 
 ## Conventions
 
@@ -31,7 +31,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 - Offline tests for logic (`tests/run_tests.py`); game behaviour is checked in game (checklist
   below) and never claimed from the tests.
 
-## Architecture (1.17.0)
+## Architecture (2.0.0)
 
 Load order (ProcThis.toc): Core → Share → Compat → Result → State → Buttons → Glow → UI → Options.
 
@@ -270,6 +270,44 @@ each checked (type, range, allowed words); the rest come from the defaults. Impo
 added (new ids; Rule rows follow the imported copies; a Rule row to a rule not in the text is left
 to be picked again), nothing is replaced.
 
+## Milestone 6 (2.0.0)
+
+Diagnostics:
+- `/pt report`: one text for a bug report (in the Share window, to copy): Proc This!'s version,
+  the client (`GetBuildInfo`), class, in combat, auras hidden, the Cooldown Manager on or off,
+  buttons per provider, missing game functions, each rule's status and why (and "not on a shown
+  button"), the last errors caught, and the rules as Share text.
+- `/pt debug`: each rule's status change as it happens (rules on shown buttons), with why.
+- Errors caught while working a rule out (`Glow.Evaluate`'s protected call) are kept: the last 10,
+  the same one again counted (`Glow.errors`), for `/pt report`. They still show as "error".
+- The other diagnostics, from earlier milestones: the status line per rule and the list's dots,
+  `/pt spell`, `/pt buttons`, `/pt perf`, `/pt power`, `/pt api`, `/pt auras`.
+
+Release readiness:
+- `tests/check_release.py`: the version is the same in the toc, the CHANGELOG and README's Recent
+  changes (the CurseForge notes are that README line); every toc file exists and every Lua file is
+  in the toc; the release workflow leaves the developer files and tests out of the zip; the offline
+  tests pass.
+- 1.16.0-1.20.0 were milestone test builds, never published: 2.0.0 ships them together.
+
+### Release (2.0.0)
+
+1. `python3 tests/check_release.py` passes.
+2. The in-game checklist below passes on the release zip.
+3. Merge the release branch into main (fast-forward), push: the workflow uploads to CurseForge
+   and tags v2.0.0.
+
+### In-game checklist (2.0.0, the whole plan)
+
+1. Install the 2.0.0 zip over 1.20.0, `/reload`: rules, looks and glows as before; no Lua errors.
+2. `/pt report`: the text appears in the Share window, with your rules' statuses and "errors
+   caught: none"; Ctrl+C copies it.
+3. `/pt debug`, fight a mob: lines like "Lightning Shield: not glowing > glowing" as things
+   change; `/pt debug` again stops them.
+4. A quick pass over the earlier milestones' key checks: a "missing" buff rule in combat (estimate
+   or Cooldown Manager), Flame Shock per target, two rules for one spell (colours), a `[mod:shift]`
+   macro, `/pt perf` in a fight, the list's dots.
+
 ## Testing
 
 ### Offline
@@ -277,9 +315,11 @@ to be picked again), nothing is replaced.
 ```
 pip install lupa
 python3 tests/run_tests.py
+python3 tests/check_release.py   (before a release: versions, toc, workflow, tests)
 ```
 
-41 tests (1.20.0): sharing (round trip, Rule rows, one rule with what it uses; bad, damaged and
+43 tests (2.0.0): diagnostics (errors kept and counted, `/pt debug` lines, `/pt report`
+contents); sharing (round trip, Rule rows, one rule with what it uses; bad, damaged and
 hostile text refused, unknown fields and bad values dropped), templates, duplicate and priority, no
 target; button providers (LibActionButton, dropped buttons), rules skipped when not on
 a shown button, looks set once; the compatibility layer (missing functions, older forms, errors), durations

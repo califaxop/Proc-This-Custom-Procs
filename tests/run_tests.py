@@ -714,6 +714,45 @@ def _():
     """
 
 # ---------------------------------------------------------------------------------------------
+# Milestone 6: diagnostics
+# ---------------------------------------------------------------------------------------------
+@test("diagnostics: an error while working a rule out is caught, shown as ERROR and kept for /pt report")
+def _():
+    """
+    wipe(NS.db.rules)
+    MOCK.Rule({ spell = "Lightning Bolt" })
+    local real = S.Usable
+    S.Usable = function() error("boom") end
+    G.Update(); G.Update()
+    assert(MOCK.Glow("ActionButton2") == "", "no glow")
+    local e = G.errors[#G.errors]
+    assert(e and e.where == "Lightning Bolt" and e.msg:find("boom") and e.n == 2, "kept once, counted twice")
+    S.Usable = real
+    """
+
+@test("diagnostics: /pt debug prints each rule's status change; /pt report gathers everything in one text")
+def _():
+    """
+    wipe(NS.db.rules)
+    MOCK.Rule({ spell = "Lightning Bolt" })
+    MOCK.Rule({ spell = "Purge" })
+    G.Update()
+    SlashCmdList.PROCTHIS("debug")
+    MOCK.usable = false; G.Update()
+    local said = table.concat(PRINTS, " / ")
+    assert(said:find("Lightning Bolt: glowing > not glowing (not castable", 1, true), said)
+    SlashCmdList.PROCTHIS("debug"); MOCK.usable = true
+    local text
+    NS.OpenShare = function(t) text = t end
+    SlashCmdList.PROCTHIS("report")
+    assert(text, "report made: " .. table.concat(PRINTS, " / "))
+    assert(text:find("rule 1 Lightning Bolt: true", 1, true) and text:find("rule 2 Purge", 1, true)
+      and text:find("not on a shown button", 1, true), text)
+    assert(text:find("errors caught: none", 1, true) and text:find("rules: PT1:", 1, true), text)
+    assert(text:find("game functions: missing", 1, true), "the mock lacks some")
+    """
+
+# ---------------------------------------------------------------------------------------------
 # Saved variables
 # ---------------------------------------------------------------------------------------------
 SAVED_OLD = '''

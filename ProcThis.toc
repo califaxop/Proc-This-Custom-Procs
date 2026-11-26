@@ -3,7 +3,7 @@
 ## Notes: Retail-style glow on your action bar spells, when the conditions you choose are met.
 ## IconTexture: Interface\AddOns\ProcThis\media\Logo
 ## Author: You
-## Version: 1.20.0
+## Version: 2.0.0
 ## X-Curse-Project-ID: 1811746
 ## SavedVariables: ProcThisDB
 ## OptionalDeps: EllesmereUI, FlareUI
