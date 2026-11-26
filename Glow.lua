@@ -380,8 +380,27 @@ function G.Restyle()
   G.Update()
 end
 
--- One condition row: true, or false and why. A health row in combat returns true plus a gate
--- (the game decides it).
+-- Results (Result.lua): TRUE / FALSE / GATED / UNKNOWN / ERROR, with why and (GATED) the gates.
+local R = ns.Result
+
+-- a gate's opposite (for "Rule X is inactive" and "missing" rows), or nil if it has none
+local function InvertGate(g)
+  if g.kind == "bool" then return { kind = "bool", v = g.v, invert = not g.invert } end
+  if g.kind == "pct" then
+    local mode = S.OPPOSITE[g.mode]
+    local curve = mode and S.StepCurve(mode, g.pct)
+    if curve then return { kind = "pct", what = g.what, unit = g.unit, mode = mode, pct = g.pct, curve = curve, powerType = g.powerType } end
+  end
+end
+G.InvertGate = InvertGate
+
+-- how an aura was told, for the explanations
+local SOURCE = { aura = "read directly", exact = "read directly", hidden = "seen (details hidden)",
+  cdm = "the Cooldown Manager", estimate = "estimate", unknown = "can't tell" }
+G.SOURCE = SOURCE
+
+-- One condition row: status, why, gates (see Result.lua). A health row in combat is GATED (the
+-- game decides).
 function G.CheckAura(rule, a)
   if a.kind == "health" or a.kind == "mana" then
     local what = a.kind
@@ -390,23 +409,23 @@ function G.CheckAura(rule, a)
     local pct = math.max(0, math.min(100, tonumber(a.pct) or 40))
     local op = S.Op(a)
     local words = S.OPS[op]
-    if not UnitExists(unit) then return false, "no target" end
-    if S.IsDead(unit) then return false, who .. (unit == "target" and " is dead" or " are dead") end
+    if not UnitExists(unit) then return R.FALSE, "no target" end
+    if S.IsDead(unit) then return R.FALSE, who .. (unit == "target" and " is dead" or " are dead") end
     local v, why
     if what == "health" then v, why = S.HealthPct(unit) else v, why = S.ManaPct(unit) end
-    if why == "nomana" then return false, who .. (unit == "target" and " has no mana" or " have no mana") end
+    if why == "nomana" then return R.FALSE, who .. (unit == "target" and " has no mana" or " have no mana") end
     if v then
-      if S.OpMeets(op, v, pct) then return true end
-      return false, format("%s at %d%% %s (needs %s %d%%)", who, math.floor(v + 0.5), what, words, pct)
+      if S.OpMeets(op, v, pct) then return R.TRUE end
+      return R.FALSE, format("%s at %d%% %s (needs %s %d%%)", who, math.floor(v + 0.5), what, words, pct)
     end
     local api = (what == "health") and UnitHealthPercent or UnitPowerPercent
     local gs = {}
     for _, st in ipairs(S.OpSteps(op, pct, 1)) do
       local curve = S.StepCurve(st[1], st[2])
-      if not (curve and api) then return false, format("%s %s is hidden, and this client can't check it", who, what) end
+      if not (curve and api) then return R.UNKNOWN, format("%s %s is hidden, and this client can't check it", who, what) end
       gs[#gs + 1] = { kind = "pct", what = what, unit = unit, mode = st[1], pct = st[2], curve = curve }
     end
-    return true, nil, gs
+    return R.GATED, nil, gs
   end
   if S.POWER[a.kind] then
     -- Combo Points, Rage and Energy: >, >=, <, <=, = an amount
@@ -418,94 +437,103 @@ function G.CheckAura(rule, a)
     local words = S.OPS[op]
     local v, why = S.PowerAmount(kind)
     if v then
-      if S.OpMeets(op, v, n) then return true end
-      return false, format("%d %s (needs %s %d)", v, p.label, words, n)
+      if S.OpMeets(op, v, n) then return R.TRUE end
+      return R.FALSE, format("%d %s (needs %s %d)", v, p.label, words, n)
     end
-    if why == "stale" then return false, "combo points unknown since you changed target (until you gain one)" end
-    if not UnitPowerPercent then return false, format("your %s are hidden, and this client can't check them", p.label) end
+    if why == "stale" then return R.UNKNOWN, "combo points unknown since you changed target (until you gain one)" end
+    if not UnitPowerPercent then return R.UNKNOWN, format("your %s are hidden, and this client can't check them", p.label) end
     local gs = {}
     for _, st in ipairs(S.OpSteps(op, n, 100 / max)) do
       local curve = S.StepCurve(st[1], st[2])
-      if not curve then return false, format("your %s are hidden, and this client can't check them", p.label) end
+      if not curve then return R.UNKNOWN, format("your %s are hidden, and this client can't check them", p.label) end
       gs[#gs + 1] = { kind = "pct", what = kind, unit = "player", mode = st[1], pct = st[2], curve = curve, powerType = p.type }
     end
-    return true, nil, gs
+    return R.GATED, nil, gs
   end
   if a.kind == "rule" then
-    -- "Rule X is (not) active": that rule's own conditions met right now
+    -- "Rule X is (not) active": that rule's own result right now
     local other = ns.RuleById(a.rule)
-    if not other then return false, "pick a rule" end
-    if other == rule then return false, "a rule can't depend on itself" end
+    if not other then return R.UNKNOWN, "pick a rule" end
+    if other == rule then return R.ERROR, "a rule can't depend on itself" end
     local label = ns.RuleLabel(other)
-    local on, why, gs = G.Evaluate(other)
+    local st, why, gs = G.Evaluate(other)
     if a.mode ~= "missing" then
-      if not on then return false, format("rule %s isn't active (%s)", label, why or "?") end
-      return true, nil, gs
+      if st == R.FALSE then return R.FALSE, format("rule %s isn't active (%s)", label, why or "?") end
+      if st == R.UNKNOWN or st == R.ERROR then return st, format("rule %s: %s", label, why or "?") end
+      return st, nil, gs
     end
-    if not on then return true end
-    if not gs or #gs == 0 then return false, format("rule %s is active", label) end
-    -- it hangs on a hidden value: "inactive" is that value flipped, which works for one of them
-    if #gs == 1 then
-      local g = gs[1]
-      if g.kind == "bool" then return true, nil, { { kind = "bool", v = g.v, invert = not g.invert } } end
-      if g.kind == "pct" then
-        local mode = S.OPPOSITE[g.mode]
-        local curve = mode and S.StepCurve(mode, g.pct)
-        if curve then return true, nil, { { kind = "pct", what = g.what, unit = g.unit, mode = mode, pct = g.pct, curve = curve, powerType = g.powerType } } end
-      end
-    end
-    return false, format("can't tell in combat whether rule %s is inactive: it hangs on several hidden values", label)
+    local nst, nwhy, ngs = R.Not(st, why, gs, InvertGate, format("rule %s is active", label))
+    if nst == R.UNKNOWN or nst == R.ERROR then return nst, format("rule %s: %s", label, nwhy or "?") end
+    return nst, nwhy, ngs
   end
   if a.kind == "instant" then
     -- "Spell X is (not) instant cast": from its current cast time
     local sp = ns.AuraName(rule, a)
-    if not sp then return false, "name the spell" end
+    if not sp then return R.UNKNOWN, "name the spell" end
     local ct = S.CastTime(sp)
-    if ct == nil then return false, format("can't read %s's cast time", sp) end
+    if ct == nil then return R.UNKNOWN, format("can't read %s's cast time", sp) end
     local instant = ct <= 0
     if a.mode == "missing" then
-      if instant then return false, format("%s is instant now", sp) end
-      return true
+      if instant then return R.FALSE, format("%s is instant now", sp) end
+      return R.TRUE
     end
-    if not instant then return false, format("%s isn't instant (%.1f s cast)", sp, ct / 1000) end
-    return true
+    if not instant then return R.FALSE, format("%s isn't instant (%.1f s cast)", sp, ct / 1000) end
+    return R.TRUE
   end
   local an = ns.AuraLabel and ns.AuraLabel(rule, a) or ns.AuraName(rule, a)
-  if not an then return false, "name the aura" end
+  if not an then return R.UNKNOWN, "name the aura" end
   local who = (a.unit == "target") and "your target" or "you"
-  local has = S.AuraPresent(a, an)
+  local selfOnly = (a.name or "") == "" or a.name == ns.RuleSpellName(rule)
+  local has, how, detail = S.AuraPresent(a, an, selfOnly)
   if has == nil then
-    return false, format("%s on %s is hidden in combat (track it in the Cooldown Manager)", an, who)
+    return R.UNKNOWN, format("%s on %s: can't tell in combat%s (track it in the Cooldown Manager)", an, who,
+      detail and (" - " .. detail) or "")
   end
+  local est = (how == "estimate") and format(" (estimate: %s)", detail or "from your casts") or ""
   if a.mode == "missing" then
-    if has then return false, format("%s is on %s", an, who) end
-    return true
+    if has then return R.FALSE, format("%s is on %s%s", an, who, est) end
+    return R.TRUE
   end
-  if not has then return false, format("%s is not on %s", an, who) end
-  return true
+  if not has then return R.FALSE, format("%s is not on %s%s", an, who, est) end
+  return R.TRUE
 end
 
--- A rule's verdict: on (true/false), why (for the settings window), and the hidden conditions
--- (gates) the client still has to decide when on is true.
+-- A rule's result: status (Result.lua), why (for the settings window), and for GATED the hidden
+-- conditions (gates) the game decides. A rule that needs another rule that needs it back can't be
+-- decided: ERROR instead of looping.
 local evaluating = {}
 local Evaluate
--- (a rule that needs another rule that needs it back can't be decided: say so instead of looping)
 function G.Evaluate(rule)
-  if evaluating[rule] then return false, "rules depend on each other in a loop" end
+  if evaluating[rule] then return R.ERROR, "rules depend on each other in a loop" end
   evaluating[rule] = true
-  local ok, on, why, gates = pcall(Evaluate, rule)
+  local ok, st, why, gates = pcall(Evaluate, rule)
   evaluating[rule] = nil
-  if not ok then return false, "error: " .. tostring(on) end
-  return on, why, gates
+  if not ok then return R.ERROR, "error: " .. tostring(st) end
+  return st, why, gates
+end
+
+-- one check as a result entry (a gate goes into a list)
+local function Entry(st, why, gate)
+  if st == R.GATED and gate and gate.kind then return { st, why, { gate } } end
+  return { st, why, gate }
 end
 
 function Evaluate(rule)
   local name = ns.RuleSpellName(rule)
-  if not rule.enabled or not name then return false, "off" end
-  local gates = {}
-  if rule.combat and not S.InCombat() then return false, "not in combat" end
-  if rule.control and not S.HasControl() then return false, "no control (stunned...)" end
-  if rule.melee and not S.BeingMeleed() then return false, "not being hit in melee" end
+  if not rule.enabled or not name then return R.FALSE, "off" end
+  local checks = {}
+  -- the simple checks first: a confirmed "no" here decides the rule
+  if rule.combat then
+    local st, why, g = S.InCombat()
+    if st == R.FALSE then return R.FALSE, why end
+    checks[#checks + 1] = Entry(st, why, g)
+  end
+  if rule.control then
+    local st, why, g = S.HasControl()
+    if st == R.FALSE then return R.FALSE, why end
+    checks[#checks + 1] = Entry(st, why, g)
+  end
+  if rule.melee and not S.BeingMeleed() then return R.FALSE, "not being hit in melee" end
   -- buff / debuff conditions, in groups: a group holds when all its rows do ("all") or any one
   -- does ("any"); the rule needs every group ("and") or any one group ("or")
   local groups = {}
@@ -517,66 +545,39 @@ function Evaluate(rule)
   local gids = {}
   for g in pairs(groups) do gids[#gids + 1] = g end
   table.sort(gids)
-  -- Gates (conditions the game decides, like health in combat) can only all-hold together:
-  -- they're layers of alpha that multiply. So within "any one of" (or across OR groups) one
-  -- gated choice can stand in for the rest; two can't.
-  local function GroupOK(g)
-    local any = (rule.groupModes and rule.groupModes[g]) == "any"
-    local whys, gated, gatedN, mine = {}, nil, 0, {}
-    for _, a in ipairs(groups[g]) do
-      local ok, why, gs = G.CheckAura(rule, a)
-      if any then
-        if ok and not gs then return true end -- plainly true: enough
-        if ok then gated, gatedN = gs, gatedN + 1 else whys[#whys + 1] = why end
-      else
-        if not ok then return false, why end
-        for _, x in ipairs(gs or {}) do mine[#mine + 1] = x end
-      end
-    end
-    if any then
-      if gatedN == 1 then return true, nil, gated end
-      if gatedN > 1 then return false, "two hidden health / mana checks in one \"any one\" group can't be decided" end
-      return false, (#whys == 1) and whys[1] or ("none of: " .. table.concat(whys, "; or "))
-    end
-    return true, nil, mine
+  local function Group(g)
+    local rows = {}
+    for _, a in ipairs(groups[g]) do rows[#rows + 1] = { G.CheckAura(rule, a) } end
+    if (rule.groupModes and rule.groupModes[g]) == "any" then return R.Any(rows) end
+    return R.All(rows)
   end
   if #gids > 0 then
-    if rule.join == "or" then
-      local whys, gatedSets = {}, {}
-      local okPlain = false
-      for _, g in ipairs(gids) do
-        local ok, why, gs = GroupOK(g)
-        if ok and (not gs or #gs == 0) then okPlain = true; break end
-        if ok then gatedSets[#gatedSets + 1] = gs else whys[#whys + 1] = why end
-      end
-      if not okPlain then
-        if #gatedSets == 1 then
-          for _, x in ipairs(gatedSets[1]) do gates[#gates + 1] = x end
-        elseif #gatedSets > 1 then
-          return false, "two OR groups with hidden health / mana checks can't be decided"
-        else
-          return false, (#whys == 1) and whys[1] or ("no group holds: " .. table.concat(whys, " / "))
-        end
-      end
-    else
-      for _, g in ipairs(gids) do
-        local ok, why, gs = GroupOK(g)
-        if not ok then return false, why end
-        for _, x in ipairs(gs or {}) do gates[#gates + 1] = x end
-      end
-    end
+    local gres = {}
+    for _, g in ipairs(gids) do gres[#gres + 1] = { Group(g) } end
+    local st, why, gs
+    if rule.join == "or" then st, why, gs = R.Any(gres) else st, why, gs = R.All(gres) end
+    if st == R.FALSE then return R.FALSE, why end
+    checks[#checks + 1] = { st, why, gs }
   end
-  if rule.proc and not S.Flagged(name) then return false, "not flagged as a proc" end
+  if rule.proc and not S.Flagged(name) then return R.FALSE, "not flagged as a proc" end
   local item = ns.RuleItem(rule)
-  if rule.ready and not S.Ready(name, item) then return false, "on cooldown" end
-  if rule.usable then
-    local u = S.Usable(name, item)
-    if isSecret(u) then gates[#gates + 1] = { kind = "bool", v = u }
-    elseif not u then return false, item and "not usable (none in your bags, or can't use it now)" or "not castable (mana / not known)" end
+  if rule.ready then
+    local st, why, g = S.Ready(name, item)
+    if st == R.FALSE then return R.FALSE, why end
+    checks[#checks + 1] = Entry(st, why, g)
   end
-  if #gates > MAX_GATES then return false, "too many hidden conditions at once" end
-  if #gates > 0 then return true, "decided by the game (hidden values)", gates end
-  return true, "glowing"
+  if rule.usable then
+    local st, why, g = S.Usable(name, item)
+    if st == R.FALSE then return R.FALSE, why end
+    checks[#checks + 1] = Entry(st, why, g)
+  end
+  local st, why, gates = R.All(checks)
+  if st == R.GATED then
+    if #gates > MAX_GATES then return R.UNKNOWN, format("too many hidden conditions at once (%d; at most %d)", #gates, MAX_GATES) end
+    return R.GATED, "decided by the game (hidden values)", gates
+  end
+  if st == R.TRUE then return R.TRUE, "glowing" end
+  return st, why
 end
 
 local testUntil = 0
@@ -604,12 +605,11 @@ function G.Update()
       if testing then
         if rule.enabled then verdict[name] = "plain"; byRule[name] = rule end
       else
-        local on, _, gates = G.Evaluate(rule)
-        if on then
-          -- several rules for one spell: a plain yes wins, else the first rule the game decides
-          if not gates or #gates == 0 then verdict[name] = "plain"; byRule[name] = rule
-          elseif verdict[name] == nil then verdict[name] = gates; byRule[name] = rule end
-        end
+        local st, _, gates = G.Evaluate(rule)
+        -- several rules for one spell: a plain yes wins, else the first rule the game decides;
+        -- FALSE, UNKNOWN and ERROR never glow
+        if st == R.TRUE then verdict[name] = "plain"; byRule[name] = rule
+        elseif st == R.GATED and verdict[name] == nil then verdict[name] = gates; byRule[name] = rule end
       end
     end
   end
@@ -670,6 +670,8 @@ function G.Init()
       S.OnCast(a3)
     elseif event == "PLAYER_TARGET_CHANGED" then
       S.OnTargetChanged()
+    elseif event == "PLAYER_REGEN_ENABLED" then
+      S.OnCombatEnd()
     elseif event == "COMBO_TARGET_CHANGED" then
       S.OnComboTarget()
     elseif (event == "UNIT_POWER_FREQUENT" or event == "UNIT_POWER_UPDATE") and a1 == "player" then

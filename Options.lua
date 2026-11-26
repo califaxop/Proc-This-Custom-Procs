@@ -492,18 +492,23 @@ local function BuildEditor(p)
 
   -- live status: glowing or not and why, buttons, how each aura is read right now
   local HOW = { aura = "read directly", exact = "read directly", hidden = "seen (details hidden)",
-    cdm = "from the Cooldown Manager", ["your cast"] = "from your casts", guess = "last known (not in the Cooldown Manager)",
-    unknown = "hidden in combat" }
+    cdm = "from the Cooldown Manager", estimate = "estimate", unknown = "can't tell in combat" }
+  local R = ns.Result
+  -- a rule's result as one line
+  local function ResultLine(st, why, gates)
+    if st == R.GATED then return "|cffffd200Glowing when the game says so (hidden values)|r" end
+    if st == R.TRUE then return "|cff60ff60Glowing|r" end
+    if st == R.UNKNOWN then return "|cffffd200Not glowing: can't tell|r - " .. (why or "?") end
+    if st == R.ERROR then return "|cffff6060Not glowing: error|r - " .. (why or "?") end
+    return "Not glowing: " .. (why or "?")
+  end
   e.UpdateStatus = function()
     local r = Rule()
     if not r then return end
     local name = ns.RuleSpellName(r)
     if not name then e.status:SetText("|cffff6060Type a spell or item: name or ID.|r"); return end
     local lines = {}
-    local on, why, gates = ns.Glow.Evaluate(r)
-    if on and gates and #gates > 0 then lines[#lines + 1] = "|cffffd200Glowing when the game says so (hidden values)|r"
-    elseif on then lines[#lines + 1] = "|cff60ff60Glowing|r"
-    else lines[#lines + 1] = "Not glowing: " .. why end
+    lines[#lines + 1] = ResultLine(ns.Glow.Evaluate(r))
     local nb = ns.Glow.CountButtons(r)
     lines[#lines + 1] = nb > 0 and format("On your action bars: %d button%s", nb, nb == 1 and "" or "s")
       or "|cffff6060Not on any of Blizzard's action bars.|r"
@@ -512,10 +517,12 @@ local function BuildEditor(p)
       if a.kind == "rule" then
         local other = ns.RuleById(a.rule)
         if other then
-          local on2, _, gs2 = ns.Glow.Evaluate(other)
+          local st2, why2 = ns.Glow.Evaluate(other)
           lines[#lines + 1] = format("Rule %s: %s", ns.RuleLabel(other),
-            (on2 and gs2 and #gs2 > 0) and "|cffffd200active when the game says so (hidden values)|r"
-            or (on2 and "|cff60ff60active|r" or "not active"))
+            st2 == R.GATED and "|cffffd200active when the game says so (hidden values)|r"
+            or st2 == R.TRUE and "|cff60ff60active|r"
+            or (st2 == R.UNKNOWN or st2 == R.ERROR) and format("|cffffd200can't tell|r (%s)", why2 or "?")
+            or "not active")
         end
       elseif ns.State.POWER[a.kind] then
         local p = ns.State.POWER[a.kind]
@@ -539,11 +546,14 @@ local function BuildEditor(p)
         lines[#lines + 1] = format("%s: %s", an, ct == nil and "|cffffd200cast time hidden|r"
           or (ct <= 0 and "|cff60ff60instant now|r" or format("%.1f s cast", ct / 1000)))
       elseif an then
-        local has, how = ns.State.AuraPresent(a, an)
+        local selfOnly = (a.name or "") == "" or a.name == name
+        local has, how, detail = ns.State.AuraPresent(a, an, selfOnly)
         local where = a.unit == "target" and "your target" or "you"
         local state = has == nil and "|cffffd200can't tell|r" or (has and "on " .. where or "not on " .. where)
+        local src = HOW[how] or how or "?"
+        if detail then src = src .. ": " .. detail end
         local cdm = ns.State.Tracked(an) and "|cff60ff60tracked|r" or "|cffff6060not tracked|r"
-        lines[#lines + 1] = format("%s: %s (%s), Cooldown Manager: %s", an, state, HOW[how] or how or "?", cdm)
+        lines[#lines + 1] = format("%s: %s (%s), Cooldown Manager: %s", an, state, src, cdm)
       end
     end
     e.status:SetText(table.concat(lines, "\n"))

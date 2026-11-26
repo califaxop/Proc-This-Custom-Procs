@@ -19,22 +19,24 @@ function S.AurasLocked()
   return false
 end
 
--- Out of combat: read your buffs directly. true / false, or nil if unreadable.
+-- Out of combat: read your buffs directly. true / false, or nil if unreadable; plus the aura (when
+-- readable: for how long it lasts and when it ends).
 local function AuraByName(name)
   if C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName then
     local ok, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", name, "HELPFUL")
     if ok then
       if aura == nil then return false end
-      if canAccess(aura) then return true end
+      if canAccess(aura) then return true, aura end
       return nil
     end
   end
   if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
     for i = 1, 60 do
       local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
-      if not ok or not aura then return false end
+      if not ok then return nil end -- (failed: can't tell, not "absent")
+      if not aura then return false end
       if not canAccess(aura) or not Readable(aura.name) then return nil end
-      if aura.name == name then return true end
+      if aura.name == name then return true, aura end
     end
     return false
   end
@@ -91,19 +93,51 @@ local function FromCooldownManager(name)
   return nil
 end
 
--- last known state per buff name (from out of combat, or from casting it)
-local known = {}
+-- What Proc This! knows of your buffs between direct reads (1.16.0). In combat the game hides your
+-- buffs; a buff not tracked in the Cooldown Manager is then estimated, and only where that's sound:
+--   seen[name] = { present, at, expires (GetTime; 0 = no end time) }: the last direct read
+--   castAt[name] = when you last cast a spell of that name (the cast doesn't prove the buff landed)
+--   buffDur[name] = how long it lasts, from direct reads
+-- Estimates (how = "estimate"):
+--   - you cast it after the last read, and its duration is known: on until that runs out, then off
+--   - read on with an end time: on until then, then off (it can end sooner: a dispel, charges used)
+--   - read on with no end time: on
+--   - read off, and it's the rule's own spell (only your cast puts it on you): off until you cast it
+-- Anything else is unknown (how = "unknown"): never treated as on or as off.
+local seen, castAt, buffDur = {}, {}, {}
 
--- Is buff `name` on you? Returns true/false, plus how it knows: "aura", "cdm" or "guess".
-function S.HasBuff(name)
+local function Remember(name, present, aura)
+  local expires = 0
+  if aura and Readable(aura.expirationTime) and type(aura.expirationTime) == "number" then expires = aura.expirationTime end
+  if aura and Readable(aura.duration) and type(aura.duration) == "number" and aura.duration > 0 then buffDur[name] = aura.duration end
+  seen[name] = { present = present, at = GetTime(), expires = present and expires or nil }
+end
+
+-- Is buff `name` on you? Returns true/false or nil (can't tell), how it knows ("aura", "cdm",
+-- "estimate", "unknown"), and a detail for the settings window. selfOnly: it's the rule's own spell.
+function S.HasBuff(name, selfOnly)
   if not S.AurasLocked() then
-    local v = AuraByName(name)
-    if v ~= nil then known[name] = v; return v, "aura" end
+    local v, aura = AuraByName(name)
+    if v ~= nil then Remember(name, v, aura); return v, "aura" end
   end
   local v = FromCooldownManager(name)
-  if v ~= nil then known[name] = v; return v, "cdm" end
-  -- not tracked in the Cooldown Manager: the last thing we knew (it can't see it run out in combat)
-  return known[name] or false, "guess"
+  if v ~= nil then return v, "cdm" end
+  local now, last, c = GetTime(), seen[name], castAt[name]
+  if c and (not last or c >= last.at) then
+    local d = buffDur[name]
+    if not d then return nil, "unknown", "cast, but how long it lasts isn't known yet" end
+    if now - c <= d then return true, "estimate", format("from your cast %d s ago (lasts %d s)", now - c, d) end
+    return false, "estimate", format("your cast %d s ago has run out (lasts %d s)", now - c, d)
+  end
+  if last then
+    if last.present then
+      if (last.expires or 0) == 0 then return true, "estimate", "seen on you, with no end time" end
+      if now < last.expires then return true, "estimate", format("seen on you, ends in %d s", last.expires - now) end
+      return false, "estimate", "seen on you, and its time has run out"
+    end
+    if selfOnly then return false, "estimate", "not on you when last seen, and you haven't cast it since" end
+  end
+  return nil, "unknown", "not seen since combat began"
 end
 
 -- For the settings window: can this buff/debuff be followed in combat?
@@ -113,8 +147,8 @@ function S.Tracked(name) return FromCooldownManager(name) ~= nil end
 -- Debuffs and buffs on your target, debuffs on you
 -- Out of combat the game answers exactly. In combat Forever refuses aura queries from addons
 -- ("Auras cannot be accessed when secret"), so none are made then. Your own debuffs on your
--- target are followed from your casts instead (your casts stay readable); anything else is
--- "can't tell" in combat, and a rule that needs it doesn't glow.
+-- target are followed from your casts instead (your casts stay readable): an estimate (a cast can
+-- miss or be resisted); anything else is "can't tell" in combat, and a rule that needs it doesn't glow.
 ---------------------------------------------------------------------------
 -- present = true/false, or nil if the game won't say; how = "exact" or "hidden"
 local function Query(unit, name, filter)
@@ -128,10 +162,19 @@ local function Query(unit, name, filter)
   return true, "exact", aura
 end
 
-local castAt, learnedDur = {}, {}   -- debuff name -> when you last cast it / how long it lasts
+-- your debuff casts, per target (its GUID, when the game shows it; else "current", forgotten when
+-- you change targets): dots[key][debuff] = { t = when, left = charges left }
+local dots, learnedDur = {}, {}
 local DEFAULT_DUR = 12
+local function TargetKey()
+  if not UnitExists("target") then return nil end
+  local ok, guid = pcall(UnitGUID, "target")
+  if ok and Readable(guid) and type(guid) == "string" then return guid end
+  return "current"
+end
 
--- Is debuff `name` on your target? Returns true/false (nil = can't tell) and how it was decided.
+-- Is debuff `name` on your target? Returns true/false (nil = can't tell), how it was decided, and
+-- a detail.
 function S.TargetDebuff(name, mineOnly, dur)
   local filter = mineOnly and "HARMFUL|PLAYER" or "HARMFUL"
   local present, how, aura = Query("target", name, filter)
@@ -140,12 +183,24 @@ function S.TargetDebuff(name, mineOnly, dur)
   -- combat: Blizzard's Cooldown Manager follows debuffs you track there (Stormstrike...), exactly
   local cdm = FromCooldownManager(name)
   if cdm ~= nil then return cdm, "cdm" end
-  -- otherwise: your own debuff is on it while your last cast of it lasts
+  -- otherwise: your own debuff, estimated from your casts on this target
   if mineOnly then
-    local lasts = (dur and dur > 0) and dur or learnedDur[name] or DEFAULT_DUR
-    local c = castAt[name]
-    if c and GetTime() - c.t <= lasts and (not c.left or c.left > 0) then return true, "your cast" end
-    return false, "your cast"
+    local key = TargetKey()
+    if not key then return false, "exact" end -- (no target: nothing on it)
+    local lasts = (dur and dur > 0) and dur or learnedDur[name]
+    local assumed = not lasts
+    lasts = lasts or DEFAULT_DUR
+    local c = dots[key] and dots[key][name]
+    if not c then
+      if key == "current" then return nil, "unknown", "your casts can't be told apart per target here" end
+      return false, "estimate", "you haven't cast it on this target"
+    end
+    local ago = GetTime() - c.t
+    if c.left and c.left <= 0 then return false, "estimate", "its charges are used up" end
+    if ago <= lasts then
+      return true, "estimate", format("from your cast %d s ago (lasts %d s%s)", ago, lasts, assumed and ", assumed" or "")
+    end
+    return false, "estimate", format("your cast %d s ago has run out (lasts %d s%s)", ago, lasts, assumed and ", assumed" or "")
   end
   return nil, "unknown"
 end
@@ -168,30 +223,36 @@ function S.MyDebuff(name)
   return nil, "unknown"
 end
 
--- your casts: a debuff of yours lands on your current target (cleared when you switch targets)
+-- your casts: a debuff of yours lands on your current target (an estimate: the cast can miss)
 function S.NoteDebuffCast(name, charges)
-  castAt[name] = { t = GetTime(), left = (charges and charges > 0) and charges or nil }
+  local key = TargetKey()
+  if not key then return end
+  dots[key] = dots[key] or {}
+  dots[key][name] = { t = GetTime(), left = (charges and charges > 0) and charges or nil }
 end
--- a spell that uses the debuff up was cast: one charge gone
+-- a spell that uses the debuff up was cast: one charge gone (on your current target)
 function S.UseDebuffCharge(name)
-  local c = castAt[name]
+  local key = TargetKey()
+  local c = key and dots[key] and dots[key][name]
   if c and c.left then c.left = c.left - 1 end
 end
-function S.OnTargetChanged() wipe(castAt); S.comboStale = true end
+-- (records per GUID stay; the "current" ones belong to the old target)
+function S.OnTargetChanged() dots.current = nil; S.comboStale = true end
+-- out of combat the game answers directly again: old estimates can go
+function S.OnCombatEnd() wipe(dots) end
 
 ---------------------------------------------------------------------------
 -- One aura condition of a rule (see ns.NEW_AURA): on you or your target, a buff or a debuff.
 ---------------------------------------------------------------------------
-
--- Is it there? true/false, or nil when the game won't say (combat, not in the Cooldown Manager);
--- plus how it was decided: "aura", "exact", "hidden", "cdm", "your cast", "guess", "unknown".
-function S.AuraPresent(a, name)
+-- Is it there? true/false, or nil when it can't be told; how it was decided ("aura", "exact",
+-- "hidden", "cdm", "estimate", "unknown"), and a detail. selfOnly: the buff is the rule's own spell.
+function S.AuraPresent(a, name, selfOnly)
   if a.unit == "target" then
     if a.kind == "debuff" then return S.TargetDebuff(name, a.mine, a.dur) end
     return S.TargetBuff(name)
   end
   if a.kind == "debuff" then return S.MyDebuff(name) end
-  return S.HasBuff(name)
+  return S.HasBuff(name, selfOnly)
 end
 
 ---------------------------------------------------------------------------
@@ -423,55 +484,65 @@ end
 ---------------------------------------------------------------------------
 -- Spells
 ---------------------------------------------------------------------------
--- Castable (known, enough mana); for an item, usable (you have it and can use it now). Returns
--- true/false, or the game's hidden value untouched.
+-- Each answers with a result (see Result.lua): status, why, and for GATED the one gate (a hidden
+-- boolean the glow is switched by, never read here).
+local R = ns.Result
+
+-- Castable (known, enough mana); for an item, usable (you have it and can use it now).
 function S.Usable(name, item)
-  if item then
-    local fn = (C_Item and C_Item.IsUsableItem) or IsUsableItem
-    if not fn then return true end
-    local ok, usable = pcall(fn, item)
-    if not ok then return false end
-    if isSecret(usable) then return usable end
-    return usable and true or false
-  end
-  if not (C_Spell and C_Spell.IsSpellUsable) then
-    if IsUsableSpell then return (IsUsableSpell(name)) and true or false end
-    return true
-  end
-  local ok, usable = pcall(C_Spell.IsSpellUsable, name)
-  if not ok then return false end
-  if isSecret(usable) then return usable end
-  return usable and true or false
+  local fn
+  if item then fn = (C_Item and C_Item.IsUsableItem) or IsUsableItem
+  else fn = (C_Spell and C_Spell.IsSpellUsable) or IsUsableSpell end
+  if not fn then return R.UNKNOWN, "this client can't tell if it's usable" end
+  local ok, usable = pcall(fn, item or name)
+  if not ok then return R.ERROR, "the game couldn't check if it's usable" end
+  if isSecret(usable) then return R.GATED, nil, { kind = "bool", v = usable } end
+  if usable then return R.TRUE end
+  return R.FALSE, item and "not usable (none in your bags, or can't use it now)" or "not castable (mana / not known)"
 end
 
--- Off cooldown. The global cooldown doesn't count (both flags stay readable). For an item, its own
--- cooldown (a cooldown of 1.5 s or less is the global one).
+-- Off cooldown. The global cooldown doesn't count. For an item, its own cooldown (a cooldown of
+-- 1.5 s or less is the global one). When the game hides a spell's cooldown, the glow is switched
+-- by the hidden "on cooldown" flag (open when it's off); the global cooldown then counts too.
 function S.Ready(name, item)
   if item then
     local fn = (C_Container and C_Container.GetItemCooldown) or GetItemCooldown
-    if not fn then return true end
+    if not fn then return R.UNKNOWN, "this client can't read item cooldowns" end
     local ok, start, duration = pcall(fn, item)
-    if not (ok and Readable(start) and Readable(duration)) then return true end
-    return not (start and start > 0 and duration and duration > 1.5)
+    if not ok then return R.ERROR, "the game couldn't read its cooldown" end
+    if not (Readable(start) and Readable(duration)) then return R.UNKNOWN, "its cooldown is hidden" end
+    if start and start > 0 and duration and duration > 1.5 then return R.FALSE, "on cooldown" end
+    return R.TRUE
   end
-  if not (C_Spell and C_Spell.GetSpellCooldown) then return true end
+  if not (C_Spell and C_Spell.GetSpellCooldown) then return R.UNKNOWN, "this client can't read cooldowns" end
   local ok, info = pcall(C_Spell.GetSpellCooldown, name)
-  if not (ok and type(info) == "table") then return true end
+  if not ok then return R.ERROR, "the game couldn't read its cooldown" end
+  if type(info) ~= "table" then return R.UNKNOWN, "the game doesn't know this spell's cooldown" end
   local active, gcd = info.isActive, info.isOnGCD
-  if not Readable(active) then return true end
-  if not active then return true end
-  return Readable(gcd) and gcd or false
+  if isSecret(active) then return R.GATED, nil, { kind = "bool", v = active, invert = true } end
+  if active == nil then return R.UNKNOWN, "its cooldown isn't readable" end
+  if not active then return R.TRUE end
+  if Readable(gcd) and gcd then return R.TRUE end -- (just the global cooldown)
+  return R.FALSE, "on cooldown"
 end
 
 -- You have control of your character (not stunned, feared, charmed...).
 function S.HasControl()
-  if not HasFullControl then return true end
-  local v = HasFullControl()
-  if isSecret(v) then return true end
-  return v and true or false
+  if not HasFullControl then return R.UNKNOWN, "this client can't tell" end
+  local ok, v = pcall(HasFullControl)
+  if not ok then return R.ERROR, "the game couldn't tell" end
+  if isSecret(v) then return R.GATED, nil, { kind = "bool", v = v } end
+  if v then return R.TRUE end
+  return R.FALSE, "no control (stunned...)"
 end
 
-function S.InCombat() return UnitAffectingCombat("player") and true or false end
+function S.InCombat()
+  local ok, v = pcall(UnitAffectingCombat, "player")
+  if not ok then return R.ERROR, "the game couldn't tell" end
+  if isSecret(v) then return R.GATED, nil, { kind = "bool", v = v } end
+  if v then return R.TRUE end
+  return R.FALSE, "not in combat"
+end
 
 -- The game's proc flag for a spell (its glow on Blizzard's bars), followed by name.
 local flagged = {}
@@ -483,12 +554,12 @@ function S.OnOverlay(show, spellID)
 end
 function S.Flagged(name) return flagged[name] and true or false end
 
--- You cast it: the buff is on you now (until we learn otherwise), and if it's a debuff of yours
--- that some rule watches on your target, it's on your target now.
+-- You cast a spell: noted for estimates (a buff of that name may be on you now, a debuff of yours
+-- that some rule watches may be on your target now). A cast doesn't prove the aura landed.
 function S.OnCast(spellID)
   local n = Readable(spellID) and ns.SpellName(spellID)
   if not n then return end
-  known[n] = true
+  castAt[n] = GetTime()
   if not ns.db then return end
   for _, r in ipairs(ns.db.rules) do
     for _, a in ipairs(r.auras or {}) do
