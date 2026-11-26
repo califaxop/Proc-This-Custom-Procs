@@ -195,7 +195,15 @@ Results (1.16.0 test build, Shaman, solo):
   shield's charges were used up and the estimate still said "on". Fixed: charged buffs become
   "can't tell" once you're hit. Limitation: once it's used up, the rule can't glow until combat
   ends (no read) unless the buff is tracked in the Cooldown Manager.
-- 1, 5, 6, 7: pending.
+- 1: pass (rules and looks kept, no Lua errors seen during testing).
+- 5: pass. Flame Shock not tracked: target A dotted, no glow; target B "not on your target
+  (estimate: you haven't cast it on this target)", glows while A still has the dot; back to A, no
+  glow.
+- 6: pass. Flame Shock on the shared shock cooldown in combat: "Not glowing: on cooldown" (read
+  directly; "decided by the game" never appeared: cooldowns weren't hidden solo).
+- 7: the only "can't tell" seen was the charged-buff case above, which is correct.
+
+Milestone 1 verified in game; awaiting review before Milestone 2.
 
 ## Known limitations
 
