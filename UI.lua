@@ -74,7 +74,7 @@ end
 
 function UI.Theme()
   local S = UI.EUI()
-  local flare = not S and (not ns.db or ns.db.flareStyle ~= false) and UI.FlareBorder() ~= nil
+  local flare = not S and UI.FlareBorder() ~= nil -- FlareUI's look whenever it's installed
   local th = {}
   for k, v in pairs(flare and PALETTES.flare or PALETTES.plain) do th[k] = v end
   th.flare = flare

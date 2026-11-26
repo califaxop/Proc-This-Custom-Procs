@@ -643,26 +643,15 @@ local function PageSettings(pg)
     function(v) return v .. " s" end, Changed)):SetPoint("TOPLEFT", 0, -32)
   UI.Text(pg, "note", "Used by the \"Being attacked in melee\" condition."):SetPoint("TOPLEFT", 0, -72)
 
-  -- other UIs: each mode turns itself on when that UI is installed
+  -- other UIs: found and used on their own (no settings), shown here for information
   local sec4 = UI.Section(pg, "Other UIs", 330); sec4:SetPoint("TOPLEFT", 370, 0)
-  local function mode(label, has, key, onChange, tip, y)
-    local c = track(UI.Check(pg, label .. (has and "" or "  (not installed)"),
-      { function() return ns.db[key] ~= false end, function(v) ns.db[key] = v end }, 320, onChange))
-    c:SetPoint("TOPLEFT", 370, y)
-    local r0 = c.Refresh
-    c.Refresh = function() r0(); c.SetActive(has) end
-    c:HookScript("OnEnter", function(self)
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(label, 1, 1, 1)
-      GameTooltip:AddLine(tip, 0.85, 0.85, 0.85, true)
-      if not has then GameTooltip:AddLine("Turns on by itself when it's installed.", 1, 0.82, 0, true) end
-      GameTooltip:Show()
-    end)
-    c:HookScript("OnLeave", function() GameTooltip:Hide() end)
+  local function status(label, has, on, off, y)
+    local t = UI.Text(pg, "note", label .. ": " .. (has and on or off))
+    t:SetPoint("TOPLEFT", 370, y); t:SetWidth(330)
   end
-  mode("EllesmereUI mode", ns.HasEllesmere(), "euiMode", function() ns.Glow.Restyle(); UI.Restyle(); if ui then ui.Refresh() end end,
-    "Glows on EllesmereUI's action bars, its shape glow on shaped buttons, its glow styles (pixel lines, autocast shine, GCD ants...) in each rule's Look, and this window in EllesmereUI's style (its theme, accent colour and font). Turning it off restyles the window after a /reload.", -32)
-  mode("FlareUI mode", ns.HasFlare(), "flareStyle", function() UI.Restyle(); if ui then ui.Refresh() end end,
-    "This window in FlareUI's style (when EllesmereUI mode isn't styling it). FlareUI restyles Blizzard's own bars, so glows already show there.", -56)
+  status("EllesmereUI", ns.HasEllesmere(), "in use (glows on its bars, its glow styles, its window style)", "not installed", -34)
+  status("FlareUI", ns.HasFlare(), ns.HasEllesmere() and "installed (EllesmereUI's window style is used)" or "in use (its window style)",
+    "not installed", -58)
 
   local note = UI.Text(pg, "note", "Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, in the Rules tab.")
   note:SetPoint("TOPLEFT", 0, -112); note:SetWidth(700)
@@ -807,11 +796,11 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     ns.db.seenUI = ns.db.seenUI or {}
     if ns.EllesmereMode() and not ns.db.seenUI.eui then
       ns.db.seenUI.eui = true
-      ns.Print("EllesmereUI found: EllesmereUI mode is on (glows on its bars, its glow styles in each rule's Look). /pt to change.")
+      ns.Print("EllesmereUI found: Proc This! glows on its bars, and its glow styles are in each rule's Look.")
     end
-    if ns.HasFlare() and ns.db.flareStyle ~= false and not ns.db.seenUI.flare then
+    if ns.HasFlare() and not ns.db.seenUI.flare then
       ns.db.seenUI.flare = true
-      ns.Print("FlareUI found: FlareUI mode is on. /pt to change.")
+      ns.Print("FlareUI found: Proc This!'s window takes its style.")
     end
     -- Esc > Options > AddOns: a button that opens the window
     pcall(function()

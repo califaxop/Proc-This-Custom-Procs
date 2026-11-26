@@ -37,8 +37,6 @@ ns.DEFAULTS = {
   meleeWindow = 3,   -- seconds a melee hit on you counts as "being attacked in melee"
   -- (glowScale / glowStyle / glowAlpha: the old Look tab's one look for all rules; LoadDB copies
   -- them into each rule once, and nothing else reads them)
-  flareStyle = true,   -- FlareUI mode: settings window in FlareUI's style (when FlareUI is installed)
-  euiMode = true,      -- EllesmereUI mode: glows on its bars, shaped glows, its glow styles (when it's installed)
   chars = {},          -- each character's rules: chars["Name-Realm"] = { rules = {...}, class = "SHAMAN" }
 }
 -- A new character's first rules, on a fresh install (kept only if it knows the spell): the example
@@ -60,7 +58,7 @@ ns.GLOW_COLORS = {
 -- Other UIs, found by themselves: each one's "mode" is on while it's installed (and the player hasn't
 -- turned it off in Settings).
 function ns.HasEllesmere() return type(EllesmereUI) == "table" and type(EllesmereUI.Glows) == "table" end
-function ns.EllesmereMode() return ns.HasEllesmere() and not (ns.db and ns.db.euiMode == false) end
+function ns.EllesmereMode() return ns.HasEllesmere() end -- whenever EllesmereUI is installed
 function ns.HasFlare() return ns.UI and ns.UI.FlareBorder and ns.UI.FlareBorder() ~= nil end
 -- EllesmereUI's glow styles (EllesmereUI.Glows.STYLES, matched by name): { key, label, its name }
 ns.EUI_GLOWS = {
@@ -265,6 +263,8 @@ function ns.LoadDB()
   for k, v in pairs(ns.DEFAULTS) do
     if ProcThisDB[k] == nil then ProcThisDB[k] = Copy(v) end
   end
+  -- no mode settings any more: EllesmereUI / FlareUI modes are on whenever they're installed
+  ProcThisDB.euiMode, ProcThisDB.flareStyle = nil, nil
   -- before 1.15.0 every character shared one list: kept, for each character's first login
   if ProcThisDB.rules ~= nil then
     if ProcThisDB.sharedRules == nil then ProcThisDB.sharedRules = ProcThisDB.rules end
