@@ -15,7 +15,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 | 3 | Spell, item and aura tracking (compatibility layer, macros) | Done in 1.18.0, verified in game, reviewed |
 | 4 | Button discovery and rendering (providers, lifecycle, profiling) | Done in 1.19.0, verified in game, reviewed |
 | 5 | User experience (live status, priority, templates, import / export) | Done in 1.20.0, verified in game |
-| 6 | Diagnostics and release readiness | **Done in 2.0.0 (the release of 1-6), waiting for in-game validation** |
+| 6 | Diagnostics and release readiness | Done in 2.0.0 (the release of 1-6), verified in game, shipped |
 
 ## Conventions
 
@@ -325,6 +325,7 @@ Results (2.0.0 release candidate):
 - Checked: the link window opened under the Share window's text and buttons (both pop-ups in one
   strata, the newer one not raised). Pop-ups are now top-level and raised when they open (UI.lua
   `Popup`).
+- Checked again: the link window opens on top. 2.0.0 approved for release.
 
 ## Testing
 
