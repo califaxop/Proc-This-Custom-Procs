@@ -322,6 +322,9 @@ Results (2.0.0 release candidate):
 - From that check: the report said to paste it into a bug report but didn't say where. The Share
   window now has a "Bug report page" button with a report (the same link as Help's button,
   `ns.OpenIssues`).
+- Checked: the link window opened under the Share window's text and buttons (both pop-ups in one
+  strata, the newer one not raised). Pop-ups are now top-level and raised when they open (UI.lua
+  `Popup`).
 
 ## Testing
 

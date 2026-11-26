@@ -397,8 +397,10 @@ function UI.Popup(name, width, height)
   local dim = win.shade:CreateTexture(nil, "BACKGROUND")
   dim:SetAllPoints(); dim:SetColorTexture(0, 0, 0, 0.55)
   -- placed every time it opens (a new frame starts out shown, so it's hidden below until asked for)
+  win:SetToplevel(true)
   function win.Place(self)
     self = self or win
+    self:Raise() -- (over any other pop-up already open: the link window over the Share window)
     local host = UI.host
     self:ClearAllPoints()
     if host and host:IsShown() then
