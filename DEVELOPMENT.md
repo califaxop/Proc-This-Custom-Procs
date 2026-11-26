@@ -189,10 +189,12 @@ values are tables; the real client is stricter, so the tests prove logic, not cl
 Results (1.16.0 test build, Shaman, solo):
 - 2, 4: pass. Lightning Shield tracked: "on you / not on you (from the Cooldown Manager)", glow
   exact.
-- 3: pass after a fix. Not tracked: "not on you (estimate: not on you when last seen …)" glows;
+- 3: pass after a fix (verified: "seen on you, ends in 581 s" before the first hit, "can't tell -
+  it has charges, and you've been hit since" after, no glow). Not tracked: "not on you (estimate: not on you when last seen …)" glows;
   cast: "on you (estimate: from your cast 4 s ago (lasts 600 s))", no glow. But 16 s later the
   shield's charges were used up and the estimate still said "on". Fixed: charged buffs become
-  "can't tell" once you're hit.
+  "can't tell" once you're hit. Limitation: once it's used up, the rule can't glow until combat
+  ends (no read) unless the buff is tracked in the Cooldown Manager.
 - 1, 5, 6, 7: pending.
 
 ## Known limitations

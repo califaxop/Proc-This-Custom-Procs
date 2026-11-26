@@ -121,7 +121,7 @@ local function Remember(name, present, aura)
 end
 
 -- a charged buff, and you've been hit since `t`: it may be used up
-local USED_UP = "it has charges, and you've been hit since (track it in the Cooldown Manager for an exact answer)"
+local USED_UP = "it has charges, and you've been hit since"
 local function MaybeUsedUp(name, t) return charged[name] and lastHit > t end
 
 -- Is buff `name` on you? Returns true/false or nil (can't tell), how it knows ("aura", "cdm",
