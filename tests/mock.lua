@@ -155,11 +155,36 @@ function MOCK.Rule(fields)
   table.insert(NS.db.rules, r)
   return r
 end
--- is the glow on a button showing? "glow", "gated" (the game decides), or ""
+-- is the glow on a button showing? "glow", "gated" (the game decides), or ""; and how many layers
 function MOCK.Glow(button)
   local b = _G[button]
-  local g = b.SG_Glow
-  if not (g and g._shown) then return "" end
-  for _, gate in ipairs(b.SG_Gates or {}) do if type(gate._alpha) == "table" then return "gated" end end
-  return "glow"
+  local res, n = "", 0
+  for _, L in ipairs(b.SG_Layers or {}) do
+    if L.glow and L.glow._shown then
+      n = n + 1
+      local gated = false
+      for _, gate in ipairs(L.gates) do if type(gate._alpha) == "table" then gated = true end end
+      res = (gated and res ~= "glow") and "gated" or "glow"
+    end
+  end
+  return res, n
+end
+-- the open layers of a button for these hidden values (gate.v as stored by SetAlphaFromBoolean):
+-- vals[v] = true / false. Counts the layers whose every gate is open.
+function MOCK.OpenLayers(button, vals)
+  local open = 0
+  for _, L in ipairs(_G[button].SG_Layers or {}) do
+    if L.glow and L.glow._shown then
+      local ok = true
+      for _, gate in ipairs(L.gates) do
+        local a = gate._alpha
+        if type(a) == "table" then
+          local on = vals[a.gate]
+          if (on and a.ifTrue or a.ifFalse) == 0 then ok = false end
+        elseif a == 0 then ok = false end
+      end
+      if ok then open = open + 1 end
+    end
+  end
+  return open
 end

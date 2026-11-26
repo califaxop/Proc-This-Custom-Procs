@@ -143,6 +143,18 @@ end
 function ns.RuleById(id)
   for i, r in ipairs(ns.db and ns.db.rules or {}) do if r.id == id then return r, i end end
 end
+-- does rule x need rule r, through its Rule rows (at any depth)? (then r can't use x: a loop)
+function ns.DependsOn(x, r, seen)
+  if x == r then return true end
+  seen = seen or {}
+  if seen[x] then return false end
+  seen[x] = true
+  for _, a in ipairs(x.auras or {}) do
+    local y = a.kind == "rule" and ns.RuleById(a.rule)
+    if y and ns.DependsOn(y, r, seen) then return true end
+  end
+  return false
+end
 -- a rule as people see it: its spell, plus its place in the list when several rules glow one spell
 function ns.RuleLabel(r)
   local name = ns.RuleSpellName(r) or "(no spell)"

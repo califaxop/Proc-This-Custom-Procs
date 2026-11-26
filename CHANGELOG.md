@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.17.0 (Milestone 2: advanced condition evaluation)
+
+- Conditions the game hides now work when joined by OR ("any one" groups, rules joined by OR):
+  the glow shows when any of them holds. Before, two or more of them gave "can't tell" and no glow.
+- Several rules for one spell now all count when the game decides them: it glows when any of
+  them holds (before, only the first one), in that rule's look, never two glows on top of each
+  other.
+- More hidden conditions fit in one rule (6 together, up to 4 alternatives).
+- Fixed: "Rule X is inactive" could glow when X was active through a branch that couldn't be told.
+- A rule used by other rules is worked out once per update.
+- A loop between rules names them (A > B > A), and the rule picker no longer offers a rule that
+  would make one.
+
 ## 1.16.0 (Milestone 1: condition engine reliability)
 
 - Every condition now answers yes, no, "the game decides" (hidden values), "can't tell" or

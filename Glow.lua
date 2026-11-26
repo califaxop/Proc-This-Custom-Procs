@@ -97,8 +97,14 @@ function G.ForgetSlots() wipe(slotCache) end
 -- The glow sits inside a chain of "gate" frames on the button. Alphas multiply, so each gate
 -- is one more condition: open (1) or shut (0). Gates are how conditions the game hides
 -- (e.g. castable) still work: the client sets their alpha from the hidden value,
--- without Spell Glow ever reading it.
-local MAX_GATES = 4
+-- without Proc This! ever reading it.
+-- A button can carry several such glows ("layers", 1.17.0): one per term of a gate set (Result.lua),
+-- made exclusive, so an OR of hidden conditions works too and only one layer shows at a time.
+-- A layer: { btn, gates (frames), pulse, pulseAnim, lead, leadAnim, glow, shine, burst, shapeHost,
+-- shapeWrap, shapeOn, scale, w, h }, kept in btn.SG_Layers.
+local R = ns.Result
+local MAX_GATES = R.MAX_GATES
+local MAX_LAYERS = 4
 -- The burst (Blizzard's 0.7 s start) plays on a copy of its own, and the steady glow fades in
 -- under its last part while it fades out: the two overlap, so there's no snap where they meet
 -- (Blizzard's burst ends a little smaller than the glow).
@@ -114,15 +120,23 @@ local function FitBurst(frame, w, h) -- w, h: the glow frame's size
   if type(w) == "number" and w > 0 then t:SetSize(w * BURST_RATIO, h * BURST_RATIO) end
 end
 
-local function GlowFrame(b, scale)
-  local glow = b.SG_Glow
+local function Layer(b, i)
+  b.SG_Layers = b.SG_Layers or {}
+  local L = b.SG_Layers[i]
+  if not L then L = { btn = b }; b.SG_Layers[i] = L end
+  return L
+end
+
+local function GlowFrame(L, scale)
+  local b = L.btn
+  local glow = L.glow
   if not glow then
-    b.SG_Gates = {}
+    L.gates = {}
     local parent = b
     for i = 1, MAX_GATES do
       local g = CreateFrame("Frame", nil, parent)
       g:SetAllPoints(b)
-      b.SG_Gates[i] = g
+      L.gates[i] = g
       parent = g
     end
     -- the pulse ("while on: pulse"): a frame of its own around the glow that gently breathes
@@ -131,7 +145,7 @@ local function GlowFrame(b, scale)
     local ag = pulse:CreateAnimationGroup()
     ag:SetLooping("BOUNCE")
     local fade = ag:CreateAnimation("Alpha"); fade:SetFromAlpha(1); fade:SetToAlpha(0.35); fade:SetDuration(0.75); fade:SetSmoothing("IN_OUT")
-    b.SG_Pulse, b.SG_PulseAnim = pulse, ag
+    L.pulse, L.pulseAnim = pulse, ag
     -- the steady glow's fade-in under a burst (see Start)
     local lead = CreateFrame("Frame", nil, pulse)
     lead:SetAllPoints(b)
@@ -139,19 +153,19 @@ local function GlowFrame(b, scale)
     la:SetToFinalAlpha(true)
     local hold = la:CreateAnimation("Alpha"); hold:SetOrder(1); hold:SetFromAlpha(0); hold:SetToAlpha(0); hold:SetDuration(BURST_HANDOVER_AT)
     local rise = la:CreateAnimation("Alpha"); rise:SetOrder(2); rise:SetFromAlpha(0); rise:SetToAlpha(1); rise:SetDuration(BURST_HANDOVER); rise:SetSmoothing("OUT")
-    b.SG_Lead, b.SG_LeadAnim = lead, la
+    L.lead, L.leadAnim = lead, la
     glow = CreateFrame("Frame", nil, lead, "ActionButtonSpellAlertTemplate")
     glow:SetPoint("CENTER", b, "CENTER", 0, 0)
-    b.SG_Glow = glow
+    L.glow = glow
   end
   scale = scale or ns.NEW_RULE.scale
   local w, h = b:GetSize()
   -- resized only when the size or the button changes (Edit Mode icon size): this runs on every update
-  if b.SG_Scale ~= scale or b.SG_W ~= w or b.SG_H ~= h then
-    b.SG_Scale, b.SG_W, b.SG_H = scale, w, h
+  if L.scale ~= scale or L.w ~= w or L.h ~= h then
+    L.scale, L.w, L.h = scale, w, h
     glow:SetSize(w * scale, h * scale)
-    if b.SG_Shine then b.SG_Shine:SetSize(w * scale, h * scale) end
-    FitBurst(glow, w * scale, h * scale); FitBurst(b.SG_Shine, w * scale, h * scale)
+    if L.shine then L.shine:SetSize(w * scale, h * scale) end
+    FitBurst(glow, w * scale, h * scale); FitBurst(L.shine, w * scale, h * scale)
   end
   return glow
 end
@@ -183,8 +197,9 @@ end
 
 -- Shine: a second copy of the glow, added on top (additive) and faded out, so the glow flares
 -- briefly when it starts, then settles at its normal intensity.
-local function ShineFrame(b, glow)
-  local sh = b.SG_Shine
+local function ShineFrame(L, glow)
+  local b = L.btn
+  local sh = L.shine
   if not sh then
     sh = CreateFrame("Frame", nil, glow:GetParent(), "ActionButtonSpellAlertTemplate")
     sh:SetPoint("CENTER", b, "CENTER", 0, 0)
@@ -200,7 +215,7 @@ local function ShineFrame(b, glow)
     ag:SetScript("OnFinished", function() sh.ProcLoop:Stop(); sh:Hide() end)
     sh.SG_Anim = ag
     sh:Hide()
-    b.SG_Shine = sh
+    L.shine = sh
   end
   local gw, gh = glow:GetSize()
   sh:SetSize(gw, gh)
@@ -209,8 +224,9 @@ local function ShineFrame(b, glow)
 end
 
 -- the burst's own frame (made once per button)
-local function BurstFrame(b, glow)
-  local bf = b.SG_Burst
+local function BurstFrame(L, glow)
+  local b = L.btn
+  local bf = L.burst
   if not bf then
     bf = CreateFrame("Frame", nil, glow:GetParent():GetParent(), "ActionButtonSpellAlertTemplate") -- beside the glow's fade frame
     bf:SetPoint("CENTER", b, "CENTER", 0, 0)
@@ -224,7 +240,7 @@ local function BurstFrame(b, glow)
     out:SetToFinalAlpha(true)
     bf.SG_Out = out
     bf:Hide()
-    b.SG_Burst = bf
+    L.burst = bf
   end
   local gw, gh = glow:GetSize()
   bf:SetSize(gw, gh)
@@ -232,34 +248,39 @@ local function BurstFrame(b, glow)
   bf:SetFrameLevel(glow:GetFrameLevel() + 1)
   return bf
 end
-local function StopBurst(b)
-  local bf = b.SG_Burst
+local function StopBurst(L)
+  local bf = L.burst
   if bf and bf:IsShown() then bf.ProcStartAnim:Stop(); bf.SG_Out:Stop(); bf:Hide() end
-  if b.SG_LeadAnim and b.SG_LeadAnim:IsPlaying() then b.SG_LeadAnim:Stop() end
-  if b.SG_Lead then b.SG_Lead:SetAlpha(1) end
+  if L.leadAnim and L.leadAnim:IsPlaying() then L.leadAnim:Stop() end
+  if L.lead then L.lead:SetAlpha(1) end
 end
 
-local function StopShine(b)
-  local sh = b.SG_Shine
+local function StopShine(L)
+  local sh = L.shine
   if sh and sh:IsShown() then sh.SG_Anim:Stop(); sh.ProcLoop:Stop(); sh:Hide() end
 end
 
-local function StopShape(b)
-  if b.SG_ShapeOn then
+local function StopShape(L)
+  if L.shapeOn then
     local G2 = type(EllesmereUI) == "table" and EllesmereUI.Glows
     local stop = G2 and (G2.StopAllGlows or G2.StopShapeGlow)
-    if stop then pcall(stop, b.SG_ShapeWrap) end
-    b.SG_ShapeHost:Hide()
-    b.SG_ShapeOn = nil
+    if stop then pcall(stop, L.shapeWrap) end
+    L.shapeHost:Hide()
+    L.shapeOn = nil
   end
 end
 
-local function Hide(b)
-  local glow = b.SG_Glow
-  StopShine(b); StopBurst(b); StopShape(b)
+local function HideLayer(L)
+  local glow = L.glow
+  StopShine(L); StopBurst(L); StopShape(L)
   if not glow or not glow:IsShown() then return end
   glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop()
   glow:Hide()
+end
+
+-- every layer on a button, from layer `from` on (default: all)
+local function Hide(b, from)
+  for i, L in ipairs(b.SG_Layers or {}) do if i >= (from or 1) then HideLayer(L) end end
 end
 
 -- start the glow in the chosen style:
@@ -278,18 +299,18 @@ local function Tint(frame, r, g, b)
   end
 end
 
-local function Start(b, glow, style)
+local function Start(L, glow, style)
   style = style or ns.NEW_RULE.startStyle
   glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop()
-  StopBurst(b)
+  StopBurst(L)
   if style == "burst" then
     -- the glow itself goes straight to its loop, faded in as the burst (on its own frame) fades out
     if glow.ProcStartFlipbook then glow.ProcStartFlipbook:SetAlpha(0) end
     if glow.ProcLoopFlipbook then glow.ProcLoopFlipbook:SetAlpha(1) end
     glow:Show()
     glow.ProcLoop:Play()
-    b.SG_Lead:SetAlpha(0); b.SG_LeadAnim:Play()
-    local bf = BurstFrame(b, glow)
+    L.lead:SetAlpha(0); L.leadAnim:Play()
+    local bf = BurstFrame(L, glow)
     if bf.ProcStartFlipbook then bf.ProcStartFlipbook:SetAlpha(1) end
     bf:SetAlpha(1); bf:Show()
     bf.ProcStartAnim:Play(); bf.SG_Out:Play()
@@ -299,21 +320,22 @@ local function Start(b, glow, style)
     glow:Show()
     glow.ProcLoop:Play()
     if style == "shine" then
-      local sh = ShineFrame(b, glow)
+      local sh = ShineFrame(L, glow)
       sh.SG_Anim:Stop(); sh:SetAlpha(0); sh:Show()
       sh.ProcLoop:Play(); sh.SG_Anim:Play()
     end
   end
 end
 
--- gates: nil/empty = glow plainly; otherwise the hidden conditions the client decides
-local function Show(b, gates, rule)
+-- one layer: gates nil/empty = glow plainly; otherwise the hidden conditions the client decides
+local function ShowLayer(L, gates, rule)
+  local b = L.btn
   local style, motion, scale, alpha = ns.RuleLook(rule) -- this rule's look
-  local glow = GlowFrame(b, scale)
+  local glow = GlowFrame(L, scale)
   local n = gates and #gates or 0
-  for i, g in ipairs(b.SG_Gates) do
+  for i, g in ipairs(L.gates) do
     if i <= n then
-      if not SetGate(g, gates[i]) then Hide(b); return end
+      if not SetGate(g, gates[i]) then HideLayer(L); return end
     else
       g:SetAlpha(1)
     end
@@ -327,50 +349,56 @@ local function Show(b, gates, rule)
   local euiIdx = (not mask) and ns.EUIStyleIndex(rule) or nil
   if mask or euiIdx then
     if glow:IsShown() then glow.ProcStartAnim:Stop(); glow.ProcLoop:Stop(); glow:Hide() end
-    StopShine(b); StopBurst(b)
-    if not b.SG_ShapeHost then
-      local host = CreateFrame("Frame", nil, b.SG_Lead)
+    StopShine(L); StopBurst(L)
+    if not L.shapeHost then
+      local host = CreateFrame("Frame", nil, L.lead)
       host:SetAllPoints(b)
-      b.SG_ShapeHost = host
-      b.SG_ShapeWrap = CreateFrame("Frame", nil, host)
-      b.SG_ShapeWrap:SetAllPoints(b)
+      L.shapeHost = host
+      L.shapeWrap = CreateFrame("Frame", nil, host)
+      L.shapeWrap:SetAllPoints(b)
     end
-    b.SG_Lead:SetAlpha(1)
-    b.SG_ShapeHost:SetAlpha(alpha)
+    L.lead:SetAlpha(1)
+    L.shapeHost:SetAlpha(alpha)
     local w, h = b:GetSize()
     local key = table.concat({ mask or "", euiIdx or 0, tostring(r), tostring(gg), tostring(bb), w or 0, h or 0 }, "|")
-    if b.SG_ShapeOn ~= key then
+    if L.shapeOn ~= key then
       local E = EllesmereUI.Glows
-      if b.SG_ShapeOn and E.StopAllGlows then pcall(E.StopAllGlows, b.SG_ShapeWrap) end
-      b.SG_ShapeHost:Show(); b.SG_ShapeWrap:Show()
+      if L.shapeOn and E.StopAllGlows then pcall(E.StopAllGlows, L.shapeWrap) end
+      L.shapeHost:Show(); L.shapeWrap:Show()
       local ok
       if mask then
-        ok = pcall(E.StartShapeGlow, b.SG_ShapeWrap, math.min(w or 36, h or 36),
-          r or 1, gg or 0.79, bb or 0.14, 1.2, { maskPath = mask, borderPath = border, anchorFrame = b.SG_ShapeHost })
+        ok = pcall(E.StartShapeGlow, L.shapeWrap, math.min(w or 36, h or 36),
+          r or 1, gg or 0.79, bb or 0.14, 1.2, { maskPath = mask, borderPath = border, anchorFrame = L.shapeHost })
       else
-        ok = pcall(E.StartGlow, b.SG_ShapeWrap, euiIdx, w or 36, r or 1, gg or 0.79, bb or 0.14, nil, h or 36)
+        ok = pcall(E.StartGlow, L.shapeWrap, euiIdx, w or 36, r or 1, gg or 0.79, bb or 0.14, nil, h or 36)
       end
-      if ok then b.SG_ShapeOn = key else b.SG_ShapeHost:Hide(); b.SG_ShapeOn = nil end
+      if ok then L.shapeOn = key else L.shapeHost:Hide(); L.shapeOn = nil end
     end
-    if b.SG_ShapeOn then
+    if L.shapeOn then
       if motion == "pulse" then
-        if not b.SG_PulseAnim:IsPlaying() then b.SG_PulseAnim:Play() end
-      elseif b.SG_PulseAnim:IsPlaying() then
-        b.SG_PulseAnim:Stop(); b.SG_Pulse:SetAlpha(1)
+        if not L.pulseAnim:IsPlaying() then L.pulseAnim:Play() end
+      elseif L.pulseAnim:IsPlaying() then
+        L.pulseAnim:Stop(); L.pulse:SetAlpha(1)
       end
       return
     end
-  elseif b.SG_ShapeOn then
-    StopShape(b)
+  elseif L.shapeOn then
+    StopShape(L)
   end
-  Tint(glow, r, gg, bb); Tint(b.SG_Shine, r, gg, bb); Tint(b.SG_Burst, r, gg, bb)
+  Tint(glow, r, gg, bb); Tint(L.shine, r, gg, bb); Tint(L.burst, r, gg, bb)
   -- while on: steady, or a gentle pulse
   if motion == "pulse" then
-    if not b.SG_PulseAnim:IsPlaying() then b.SG_PulseAnim:Play() end
-  elseif b.SG_PulseAnim:IsPlaying() then
-    b.SG_PulseAnim:Stop(); b.SG_Pulse:SetAlpha(1)
+    if not L.pulseAnim:IsPlaying() then L.pulseAnim:Play() end
+  elseif L.pulseAnim:IsPlaying() then
+    L.pulseAnim:Stop(); L.pulse:SetAlpha(1)
   end
-  if not glow:IsShown() then Start(b, glow, style); Tint(b.SG_Shine, r, gg, bb); Tint(b.SG_Burst, r, gg, bb) end
+  if not glow:IsShown() then Start(L, glow, style); Tint(L.shine, r, gg, bb); Tint(L.burst, r, gg, bb) end
+end
+
+-- a button's glow: layers = { { gates, rule }, ... } (one plain layer: { { rule = r } })
+local function Show(b, layers)
+  for i, l in ipairs(layers) do ShowLayer(Layer(b, i), l, l.rule) end
+  Hide(b, #layers + 1)
 end
 
 -- style or size changed: restart every glow so the change shows
@@ -380,17 +408,21 @@ function G.Restyle()
   G.Update()
 end
 
--- Results (Result.lua): TRUE / FALSE / GATED / UNKNOWN / ERROR, with why and (GATED) the gates.
-local R = ns.Result
+-- Results (Result.lua): TRUE / FALSE / GATED / UNKNOWN / ERROR, with why and (GATED) the gate set.
 
--- a gate's opposite (for "Rule X is inactive" and "missing" rows), or nil if it has none
+-- a gate's opposite (for "Rule X is inactive", "missing" rows, and exclusive layers), or nil if it
+-- has none. The two know each other (gate.inv): a term holding both can never hold.
 local function InvertGate(g)
-  if g.kind == "bool" then return { kind = "bool", v = g.v, invert = not g.invert } end
+  if g.inv then return g.inv end
+  local ng
+  if g.kind == "bool" then ng = { kind = "bool", v = g.v, invert = not g.invert } end
   if g.kind == "pct" then
     local mode = S.OPPOSITE[g.mode]
     local curve = mode and S.StepCurve(mode, g.pct)
-    if curve then return { kind = "pct", what = g.what, unit = g.unit, mode = mode, pct = g.pct, curve = curve, powerType = g.powerType } end
+    if curve then ng = { kind = "pct", what = g.what, unit = g.unit, mode = mode, pct = g.pct, curve = curve, powerType = g.powerType } end
   end
+  if ng then g.inv, ng.inv = ng, g end
+  return ng
 end
 G.InvertGate = InvertGate
 
@@ -425,7 +457,7 @@ function G.CheckAura(rule, a)
       if not (curve and api) then return R.UNKNOWN, format("%s %s is hidden, and this client can't check it", who, what) end
       gs[#gs + 1] = { kind = "pct", what = what, unit = unit, mode = st[1], pct = st[2], curve = curve }
     end
-    return R.GATED, nil, gs
+    return R.GATED, nil, R.Gates(gs)
   end
   if S.POWER[a.kind] then
     -- Combo Points, Rage and Energy: >, >=, <, <=, = an amount
@@ -448,7 +480,7 @@ function G.CheckAura(rule, a)
       if not curve then return R.UNKNOWN, format("your %s are hidden, and this client can't check them", p.label) end
       gs[#gs + 1] = { kind = "pct", what = kind, unit = "player", mode = st[1], pct = st[2], curve = curve, powerType = p.type }
     end
-    return R.GATED, nil, gs
+    return R.GATED, nil, R.Gates(gs)
   end
   if a.kind == "rule" then
     -- "Rule X is (not) active": that rule's own result right now
@@ -498,23 +530,45 @@ function G.CheckAura(rule, a)
   return R.TRUE
 end
 
--- A rule's result: status (Result.lua), why (for the settings window), and for GATED the hidden
--- conditions (gates) the game decides. A rule that needs another rule that needs it back can't be
--- decided: ERROR instead of looping.
-local evaluating = {}
+-- A rule's result: status (Result.lua), why (for the settings window), and for GATED the gate set
+-- the game decides.
+-- Each rule is worked out once per pass (an update, or the settings window's status): rules that
+-- several others depend on aren't evaluated again, and the hidden values read in one pass are the
+-- same gates everywhere (so Result.lua can tell a gate from its opposite). A rule that needs
+-- another rule that needs it back can't be decided: ERROR, naming the loop.
+local pass, stack = {}, {}
+function G.NewPass() wipe(pass) end
+
+-- a reader's result, once per pass (same spell, same gate)
+local function Once(key, fn, ...)
+  local v = pass[key]
+  if not v then v = { fn(...) }; pass[key] = v end
+  return v[1], v[2], v[3]
+end
+
 local Evaluate
 function G.Evaluate(rule)
-  if evaluating[rule] then return R.ERROR, "rules depend on each other in a loop" end
-  evaluating[rule] = true
+  local done = pass[rule]
+  if done then return done[1], done[2], done[3] end
+  for i, r in ipairs(stack) do
+    if r == rule then
+      local names = {}
+      for j = i, #stack do names[#names + 1] = ns.RuleLabel(stack[j]) end
+      names[#names + 1] = ns.RuleLabel(rule)
+      return R.ERROR, "rules depend on each other in a loop: " .. table.concat(names, " > ")
+    end
+  end
+  stack[#stack + 1] = rule
   local ok, st, why, gates = pcall(Evaluate, rule)
-  evaluating[rule] = nil
-  if not ok then return R.ERROR, "error: " .. tostring(st) end
+  stack[#stack] = nil
+  if not ok then st, why, gates = R.ERROR, "error: " .. tostring(st), nil end
+  pass[rule] = { st, why, gates }
   return st, why, gates
 end
 
--- one check as a result entry (a gate goes into a list)
+-- one check as a result entry (a gate becomes a set of one)
 local function Entry(st, why, gate)
-  if st == R.GATED and gate and gate.kind then return { st, why, { gate } } end
+  if st == R.GATED and gate and gate.kind then return { st, why, R.Gates({ gate }) } end
   return { st, why, gate }
 end
 
@@ -524,12 +578,12 @@ function Evaluate(rule)
   local checks = {}
   -- the simple checks first: a confirmed "no" here decides the rule
   if rule.combat then
-    local st, why, g = S.InCombat()
+    local st, why, g = Once("combat", S.InCombat)
     if st == R.FALSE then return R.FALSE, why end
     checks[#checks + 1] = Entry(st, why, g)
   end
   if rule.control then
-    local st, why, g = S.HasControl()
+    local st, why, g = Once("control", S.HasControl)
     if st == R.FALSE then return R.FALSE, why end
     checks[#checks + 1] = Entry(st, why, g)
   end
@@ -562,20 +616,17 @@ function Evaluate(rule)
   if rule.proc and not S.Flagged(name) then return R.FALSE, "not flagged as a proc" end
   local item = ns.RuleItem(rule)
   if rule.ready then
-    local st, why, g = S.Ready(name, item)
+    local st, why, g = Once("ready|" .. name .. "|" .. tostring(item), S.Ready, name, item)
     if st == R.FALSE then return R.FALSE, why end
     checks[#checks + 1] = Entry(st, why, g)
   end
   if rule.usable then
-    local st, why, g = S.Usable(name, item)
+    local st, why, g = Once("usable|" .. name .. "|" .. tostring(item), S.Usable, name, item)
     if st == R.FALSE then return R.FALSE, why end
     checks[#checks + 1] = Entry(st, why, g)
   end
-  local st, why, gates = R.All(checks)
-  if st == R.GATED then
-    if #gates > MAX_GATES then return R.UNKNOWN, format("too many hidden conditions at once (%d; at most %d)", #gates, MAX_GATES) end
-    return R.GATED, "decided by the game (hidden values)", gates
-  end
+  local st, why, set = R.All(checks)
+  if st == R.GATED then return R.GATED, why, set end
   if st == R.TRUE then return R.TRUE, "glowing" end
   return st, why
 end
@@ -587,38 +638,49 @@ function G.Test(seconds)
   G.Update()
 end
 
-local verdict, byRule, lastUpdate, idle = {}, {}, 0, false
+-- per spell: "plain" (glow) with its rule, or the gate-set terms of its GATED rules, in rule order
+local plain, terms, lastUpdate, idle = {}, {}, 0, false
 function G.Update()
   lastUpdate = GetTime()
+  G.NewPass()
   -- no rules: hide whatever still glows once, then there's nothing to do
   if #ns.db.rules == 0 then
     if not idle then for _, b in ipairs(Buttons()) do Hide(b) end; idle = true end
     return
   end
   idle = false
-  -- per spell: "plain" (glow), a gates list (the client decides), or nothing
-  wipe(verdict); wipe(byRule) -- byRule: which rule's colour a spell glows in
+  wipe(plain); wipe(terms)
   local testing = GetTime() < testUntil
   for _, rule in ipairs(ns.db.rules) do
     local name = ns.RuleSpellName(rule)
-    if name and verdict[name] ~= "plain" then
+    if name and not plain[name] then
       if testing then
-        if rule.enabled then verdict[name] = "plain"; byRule[name] = rule end
+        if rule.enabled then plain[name] = { { rule = rule } } end
       else
-        local st, _, gates = G.Evaluate(rule)
-        -- several rules for one spell: a plain yes wins, else the first rule the game decides;
-        -- FALSE, UNKNOWN and ERROR never glow
-        if st == R.TRUE then verdict[name] = "plain"; byRule[name] = rule
-        elseif st == R.GATED and verdict[name] == nil then verdict[name] = gates; byRule[name] = rule end
+        local st, _, set = G.Evaluate(rule)
+        -- several rules for one spell: a plain yes wins (the first one's look); else every GATED
+        -- rule's terms, in order (the game opens whichever holds); FALSE, UNKNOWN, ERROR never glow
+        if st == R.TRUE then plain[name] = { { rule = rule } }
+        elseif st == R.GATED then
+          local list = terms[name] or {}
+          terms[name] = list
+          for _, t in ipairs(set) do
+            local c = { rule = rule }
+            for i, g in ipairs(t) do c[i] = g end
+            list[#list + 1] = c
+          end
+        end
       end
     end
   end
+  -- the GATED terms of each spell made exclusive: one layer each
+  for name, list in pairs(terms) do
+    if not plain[name] then terms[name] = (R.Disjoint(list, InvertGate, MAX_LAYERS)) end
+  end
   for _, b in ipairs(Buttons()) do
     local name = b:IsVisible() and ButtonSpell(b)
-    local v = name and verdict[name]
-    if v == "plain" then Show(b, nil, byRule[name])
-    elseif type(v) == "table" then Show(b, v, byRule[name])
-    else Hide(b) end
+    local layers = name and (plain[name] or terms[name])
+    if layers and #layers > 0 then Show(b, layers) else Hide(b) end
   end
 end
 

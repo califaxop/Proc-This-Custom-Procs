@@ -304,12 +304,12 @@ local function BuildEditor(p)
       if not a then return end
       local r = Rule()
       local isRule = a.kind == "rule"
-      -- the other rules to pick from (not this one)
+      -- the other rules to pick from (not this one, nor one that needs this one: a loop)
       wipe(row.ruleOpts)
       for _, x in ipairs(ns.db.rules) do
-        if x ~= r and x.id then row.ruleOpts[#row.ruleOpts + 1] = { x.id, ns.RuleLabel(x) } end
+        if x.id and not ns.DependsOn(x, r) then row.ruleOpts[#row.ruleOpts + 1] = { x.id, ns.RuleLabel(x) } end
       end
-      if #row.ruleOpts == 0 then row.ruleOpts[1] = { false, "(add another rule first)" } end
+      if #row.ruleOpts == 0 then row.ruleOpts[1] = { false, "(no other rule can be used here)" } end
       -- a Rule row points at the first of them until one is picked
       if isRule and (not ns.RuleById(a.rule) or a.rule == r.id) then a.rule = row.ruleOpts[1][1] or nil end
       local power = POWER_UNIT[a.kind] ~= nil
@@ -495,8 +495,12 @@ local function BuildEditor(p)
     cdm = "from the Cooldown Manager", estimate = "estimate", unknown = "in combat" }
   local R = ns.Result
   -- a rule's result as one line
-  local function ResultLine(st, why, gates)
-    if st == R.GATED then return "|cffffd200Glowing when the game says so (hidden values)|r" end
+  local function ResultLine(st, why, set)
+    if st == R.GATED then
+      local line = "|cffffd200Glowing when the game says so (hidden values)|r"
+      if set.partial then line = line .. " - partly: " .. (why or "?") .. "; it may not glow every time it should" end
+      return line
+    end
     if st == R.TRUE then return "|cff60ff60Glowing|r" end
     if st == R.UNKNOWN then return "|cffffd200Not glowing: can't tell|r - " .. (why or "?") end
     if st == R.ERROR then return "|cffff6060Not glowing: error|r - " .. (why or "?") end
@@ -505,6 +509,7 @@ local function BuildEditor(p)
   e.UpdateStatus = function()
     local r = Rule()
     if not r then return end
+    ns.Glow.NewPass()
     local name = ns.RuleSpellName(r)
     if not name then e.status:SetText("|cffff6060Type a spell or item: name or ID.|r"); return end
     local lines = {}

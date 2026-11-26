@@ -10,8 +10,8 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 
 | # | Milestone | Status |
 |---|---|---|
-| 1 | Condition engine reliability | **Done in 1.16.0, waiting for review and in-game validation** |
-| 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | Not started |
+| 1 | Condition engine reliability | Done in 1.16.0, verified in game, reviewed |
+| 2 | Advanced condition evaluation (Boolean expressions, dependency caching, cycles) | **Done in 1.17.0, waiting for in-game validation and review** |
 | 3 | Spell, item and aura tracking (compatibility layer, macros) | Not started |
 | 4 | Button discovery and rendering (providers, lifecycle, profiling) | Not started |
 | 5 | User experience (live status, priority, templates, import / export) | Not started |
@@ -31,7 +31,7 @@ verification status: [API_COMPATIBILITY.md](API_COMPATIBILITY.md). User-facing c
 - Offline tests for logic (`tests/run_tests.py`); game behaviour is checked in game (checklist
   below) and never claimed from the tests.
 
-## Architecture (1.16.0)
+## Architecture (1.17.0)
 
 Load order (ProcThis.toc): Core → Result → State → Glow → UI → Options.
 
@@ -57,20 +57,23 @@ Load order (ProcThis.toc): Core → Result → State → Glow → UI → Options
 ### Evaluation path
 
 `Glow.Update` (events, merged to at most every 0.05 s, plus a 0.25 s safety tick):
-1. For each rule with a spell: `Glow.Evaluate(rule)` → result. Per spell: a TRUE result glows
-   plainly and wins; otherwise the first GATED rule's gates are used; FALSE / UNKNOWN / ERROR
+1. A new pass (`Glow.NewPass`): every rule's result, and the cooldown / castable / control /
+   combat reads, are worked out once in it (the same reads are the same gates everywhere).
+2. For each rule with a spell: `Glow.Evaluate(rule)` → result. Per spell: a TRUE result glows
+   plainly and wins (the first one's look); otherwise the terms of every GATED rule, in rule order,
+   made exclusive (`Result.Disjoint`), one glow layer each (at most 4); FALSE / UNKNOWN / ERROR
    never glow.
-2. For each visible action button: the spell or item it holds (`ButtonSpell`: cached per slot,
-   macros read every time) → glow, gated glow, or hide.
+3. For each visible action button: the spell or item it holds (`ButtonSpell`: cached per slot,
+   macros read every time) → its layers, or hide.
 
-`Glow.Evaluate(rule)` (guarded against loops and errors):
+`Glow.Evaluate(rule)` (once per pass; a loop is an ERROR naming its rules; errors are caught):
 1. Simple checks: in combat, control, being hit in melee. A confirmed FALSE ends it.
 2. Each group: its rows through `Glow.CheckAura` → `Result.All` ("all") or `Result.Any` ("any");
    the groups through `Result.All` ("and") or `Result.Any` ("or").
 3. Proc flag, off cooldown, castable / usable.
-4. Everything through `Result.All`; more than 4 gates → UNKNOWN.
+4. Everything through `Result.All`.
 
-### Result model (1.16.0)
+### Result model (1.16.0; gate sets 1.17.0)
 
 | Result | Means | Glows |
 |---|---|---|
@@ -81,13 +84,26 @@ Load order (ProcThis.toc): Core → Result → State → Glow → UI → Options
 | ERROR | reading it failed | no |
 
 Combining (Result.lua):
-- AND: a FALSE decides it; else ERROR; else UNKNOWN; else all the gates together (exact: gates
-  multiply); else TRUE.
-- OR: a TRUE decides it; one GATED stands for the OR (the game opens it only when that branch
-  holds: never a wrong glow); two or more GATED can't be combined (gates only multiply) →
-  UNKNOWN; else UNKNOWN, else ERROR, else FALSE.
-- NOT ("missing", "rule inactive"): TRUE ↔ FALSE; UNKNOWN and ERROR stay; GATED flips only when it
-  hangs on one invertible gate, else UNKNOWN.
+A GATED result carries a **gate set**: an OR of ANDs (terms, each a list of gates that must all
+hold). Gates on one frame chain multiply (AND); an OR is drawn as several glow layers on the
+button, one per term, made exclusive so that at most one shows (term k AND NOT each term before
+it). A gate knows its opposite (`gate.inv`): a term holding both is dropped, and the same read is
+one gate within a pass, so `(A and B) or C` never draws two layers for one case.
+
+- AND: a FALSE decides it; else ERROR; else UNKNOWN; else the gate sets multiplied out; else TRUE.
+- OR: a TRUE decides it; the GATED ones' terms together (`a or (a and b)` = `a`); with an UNKNOWN
+  or ERROR beside them the set is **partial** (that branch can't light it); without any GATED:
+  UNKNOWN, else ERROR, else FALSE.
+- NOT ("missing", "rule inactive"): TRUE ↔ FALSE; UNKNOWN and ERROR stay; GATED by De Morgan
+  (needs every gate's opposite: health / power curves and hidden flags have one). A partial set
+  can't be negated: UNKNOWN (its opposite would glow wrongly).
+- Limits: at most 6 gates in a term (`MAX_GATES`, the gate frames per layer), 8 terms while
+  combining (`MAX_TERMS`), 4 layers per button. What doesn't fit is left out and the set is
+  partial: it may miss a glow, never show a wrong one. Nothing left → UNKNOWN "too many hidden
+  conditions at once". A set that can never hold (only contradictions) → FALSE.
+- `tests/run_tests.py` checks this against every combination of four hidden values for 300 random
+  nested AND / OR / NOT formulas: exact sets light exactly when the formula holds, partial ones
+  never when it doesn't, and two layers never light at once.
 
 Each aura answer also says how it was known: read directly, seen (details hidden), the Cooldown
 Manager, an **estimate**, or unknown. Estimates count as answers (TRUE / FALSE) but are labelled
@@ -143,16 +159,36 @@ Severity: High = wrong glow in normal play; Medium = wrong in some situations; L
 
 | # | Risk | Milestone |
 |---|---|---|
-| R1 | Two or more hidden checks joined by OR (or in an "any" group) can't glow: UNKNOWN (before: "can't be decided", no glow). | M2 (Boolean expressions) |
-| R2 | At most 4 gates per glow (`MAX_GATES`); more → UNKNOWN. | M2 |
-| R3 | A rule used by several "Rule X" rows is evaluated once per row, every update; no caching. | M2 |
-| R4 | Several rules for one spell: only the first GATED rule's gates are used, so a later GATED rule that holds doesn't glow (never a wrong glow). | M2 |
+| R1 | Two or more hidden checks joined by OR (or in an "any" group) can't glow: UNKNOWN (before: "can't be decided", no glow). | Fixed in 1.17.0 (gate sets, layers) |
+| R2 | At most 4 gates per glow (`MAX_GATES`); more → UNKNOWN. | 1.17.0: 6 per layer, 4 layers; what doesn't fit is left out (partial) |
+| R3 | A rule used by several "Rule X" rows is evaluated once per row, every update; no caching. | Fixed in 1.17.0 (once per pass) |
+| R4 | Several rules for one spell: only the first GATED rule's gates are used, so a later GATED rule that holds doesn't glow (never a wrong glow). | Fixed in 1.17.0 (each GATED rule's terms are a layer) |
 | R5 | Estimates can be wrong (see "Aura sources"): a cast that missed, a buff ended early. They're labelled, not hidden. | M3 |
 | R6 | Macros: the spell or item is read every update (`GetActionInfo` subtype, `GetMacroSpell`, `GetMacroItem`); conditional macros follow what the game reports for the current conditions. Not verified for every macro form. | M3 |
 | R7 | Buttons: a fixed list of Blizzard bars plus EllesmereUI's `EABButton1..180` (rebuilt every 5 s while EllesmereUI is on). No provider interface yet. | M4 |
 | R8 | Every rule is evaluated on every update (events merged to 0.05 s, plus a 0.25 s tick for the melee window and Cooldown Manager changes, which have no events). Not profiled yet. | M4 |
 | R9 | A target debuff row on "missing" with no target reads "absent" (true): the rule can glow with no target if its spell is castable. Unchanged behaviour. | M5 (review) |
 | R10 | During the global cooldown, a hidden cooldown flag (finding 3) reads "on cooldown": the gated glow may dip for the GCD. Safer than glowing while on cooldown. | Check in game |
+
+## Milestone 2 (1.17.0)
+
+Found while working on it (1.16.0 source):
+
+| # | Sev. | Defect | Fix |
+|---|---|---|---|
+| 9 | Medium | OR with an unknown branch: `Any(GATED a, UNKNOWN u)` answered GATED a (right: a holding is enough), but a "Rule X is inactive" row then took its opposite, `not a`, and could glow while `u` made X active. | Such a set is partial; its opposite is UNKNOWN |
+| 10 | Low | A loop between rules said only "rules depend on each other in a loop". | The error names the rules (`A > B > A`); the rule picker no longer offers a rule that needs this one (`ns.DependsOn`) |
+| 11 | Low | `Result.LABEL` was never used. | Removed |
+
+Changes:
+- `Result.lua`: gate sets (OR of ANDs), `Gates`, `All` / `Any` / `Not` on sets, partial sets, `Disjoint`.
+- `Glow.lua`: glow layers per button (`btn.SG_Layers`; each layer the 1.16.0 glow: gate frames, pulse,
+  start animations, EllesmereUI glows); passes (`NewPass`, rule results and reads once per pass);
+  loops named; every GATED rule for a spell counts.
+- `Core.lua`: `ns.DependsOn` (the rule picker leaves out rules that would make a loop).
+- `Options.lua`: a partial GATED result says so ("partly: … it may not glow every time it should").
+
+No new game APIs: layers are more of the same frames and `SetAlphaFromBoolean` / curve gates.
 
 ## Testing
 
@@ -163,10 +199,12 @@ pip install lupa
 python3 tests/run_tests.py
 ```
 
-19 tests (1.16.0): the result model (AND / OR / NOT), buff estimates and unknowns, debuff
-estimates per target and charges, cooldown / usable / control results, rule evaluation with mixed
-results, groups with hidden checks, dependencies (active, inactive, loops, unknown), several rules
-for one spell, the gate limit, and saved-variable migration with duplicate ids. The mock's hidden
+26 tests (1.17.0): the result model (AND / OR / NOT on gate sets, partial sets, limits, and the
+random-formula check against every truth assignment), buff estimates and unknowns (charged buffs),
+debuff estimates per target and charges, cooldown / usable / control results, rule evaluation
+with mixed results, OR of hidden checks drawn as exclusive layers (checked for every combination
+of the hidden values), several rules for one spell, dependencies (active, inactive, once per pass,
+loops named, unknown), the gate limit, and saved-variable migration with duplicate ids. The mock's hidden
 values are tables; the real client is stricter, so the tests prove logic, not client behaviour.
 
 ### In-game checklist (Milestone 1 → 2)
@@ -203,7 +241,24 @@ Results (1.16.0 test build, Shaman, solo):
   directly; "decided by the game" never appeared: cooldowns weren't hidden solo).
 - 7: the only "can't tell" seen was the charged-buff case above, which is correct.
 
-Milestone 1 verified in game; awaiting review before Milestone 2.
+Milestone 1 verified in game and reviewed.
+
+### In-game checklist (Milestone 2 → 3)
+
+1. Install 1.17.0, `/reload`. Rules, looks and glows as in 1.16.0; no Lua errors. Glow + shine,
+   pulse and the EllesmereUI styles look the same.
+2. Two rules for one spell, each with a different condition the game hides in combat (e.g. Lightning
+   Bolt with "Castable", and a second Lightning Bolt rule with a Health [Self] [<] 50 % row, each in its
+   own colour): in combat it glows when either holds (1.16.0: only the first rule), in the first
+   rule's colour when both hold, and never two glows on top of each other.
+3. A rule with an "any one" group of two health rows (e.g. [Health] [Self] [<] 50, [Health]
+   [Target] [<] 20): in combat the status says "Glowing when the game says so", and it glows when
+   either holds (1.16.0: "can't tell", no glow).
+4. Three rules that use one rule (Rule rows): `/pt` status works for each; no slowdown.
+5. A loop can no longer be made from the picker: rule A uses B, then on B's Rule
+   row A isn't offered.
+6. Any "can't tell", "partly" or "error" status: screenshot it with the rule's settings.
+
 
 ## Known limitations
 
