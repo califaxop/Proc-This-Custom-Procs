@@ -319,6 +319,13 @@ Results (1.17.0 test build, Shaman, solo):
    (and Earth Shock with Shift held).
 6. Any "can't tell" or "error": screenshot it with the rule's settings.
 
+Results (1.18.0 test build, Shaman):
+- 2: pass. `/pt api`: all 27 functions present, each in its newest form (`C_Spell.*`, `C_Item.IsUsableItem`,
+  `C_Container.GetItemCooldown`, `C_Secrets.*`, `C_Spell.GetSpellDescription`).
+- 3: pass. `/pt spell`: "Lightning Shield: instant; lasts 600 s (from its tooltip)", "Flame Shock:
+  instant; lasts 12 s (from its tooltip)": the tooltip wording parses on Forever.
+- 1, 4, 5, 6: pending.
+
 ## Known limitations
 
 - Buffs and debuffs not tracked in the Cooldown Manager can't be followed exactly in combat; the

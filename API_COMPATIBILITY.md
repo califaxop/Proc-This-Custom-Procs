@@ -34,7 +34,7 @@ test or read it. `issecretvalue(v)` says whether it is.
 | `C_Item.IsUsableItem(item)` | → usable, noMana | — | items' "usable" | Docs |
 | `C_Container.GetItemCooldown(itemID)` | → start, duration, enable | — | items' "off cooldown" (hidden → UNKNOWN) | Docs |
 | `C_Spell.GetSpellInfo(spell)` | → SpellInfo { castTime, spellID, ... } | — | "Instant" rows (cast time 0); a spell's ID for its tooltip | Verified in game (`/pt cast`: readable in combat) |
-| `C_Spell.GetSpellDescription(spellID)` (older: `GetSpellDescription`) | → text | — | a buff's or debuff's duration before it's ever read ("for 12 sec", "Lasts 10 min": the longest; English wording) | Docs; the wording: Inferred (check with `/pt spell`) |
+| `C_Spell.GetSpellDescription(spellID)` (older: `GetSpellDescription`) | → text | — | a buff's or debuff's duration before it's ever read ("for 12 sec", "Lasts 10 min": the longest; English wording) | Verified in game (`/pt spell`: Lightning Shield 600 s, Flame Shock 12 s) |
 | `C_Spell.GetSpellName(id)`, `C_Item.GetItemNameByID`, `C_Item.GetItemInfoInstant` | — | — | names | In use |
 | `UNIT_SPELLCAST_SUCCEEDED` (unit, castGUID, spellID) | event | spellID can be hidden (then ignored) | your casts, for estimates | In use |
 | `UNIT_SPELLCAST_SENT` (unit, target name, castGUID, spellID) | event | the name or castGUID may be hidden (then the cast counts as before) | where a cast went: your target, another unit, you | Docs |
