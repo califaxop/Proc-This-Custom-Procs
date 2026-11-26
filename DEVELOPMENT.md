@@ -259,6 +259,15 @@ Milestone 1 verified in game and reviewed.
    row A isn't offered.
 6. Any "can't tell", "partly" or "error" status: screenshot it with the rule's settings.
 
+Results (1.17.0 test build, Shaman, solo):
+- 3: pass. "Any one" group of [Health] [Self] [<] 50 and [Health] [Target] [<] 50: "Glowing when the
+  game says so", both rows "hidden: the game decides"; glows with the target at 26% and 7%.
+- 2: pass. Two Lightning Bolt rules, both decided by the game: cyan [Health] [Self] [<] 50, then
+  magenta [Health] [Target] [<] 50. Target 23%, you above 50%: magenta (1.16.0: no glow). You below
+  50%, target 67%: cyan. One glow at a time. Also a plain yes (cyan, castable only) wins over the
+  magenta rule: cyan.
+- 1, 4, 5: pending.
+
 
 ## Known limitations
 
