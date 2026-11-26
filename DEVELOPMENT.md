@@ -379,7 +379,11 @@ Results (1.19.0 test build, Shaman):
 - 3: measured (5 rules, 96 Blizzard buttons, Windows client): idle 3.9 updates a second, 0.277 ms
   each (0.857 ms at most): about 1 ms a second; a fight 13.9 a second, 0.586 ms each (2.637 ms at
   most): about 8 ms a second, under 1% of the frame time at 60 fps. All 5 rules on shown buttons
-  (none skipped). Led to defect 24 (the idle tick); to measure again on the next build.
+  (none skipped). Led to defect 24 (the idle tick). After the fix: idle 1.0 a second, 0.288 ms
+  each (0.538 ms at most); a fight 11.9 a second, 0.580 ms each (1.079 ms at most).
+- 2 (the two macros reading as nothing): they're on the right-hand bar, which the game reports as
+  shown (`IsVisible`) but isn't on screen (faded or moved off). Not checked further: they hold no
+  rule's spell.
 - 1, 4, 5: pending.
 
 ## Known limitations
