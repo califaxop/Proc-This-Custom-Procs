@@ -9,6 +9,9 @@
 - Fixed: casting a spell marked the buff of that name as on until combat ended, so "missing" rules
   stopped glowing after it ran out. It's now an estimate that ends with the buff's known duration
   (learned from reads out of combat).
+- A buff with charges (e.g. Lightning Shield) isn't estimated as on once you've been hit since the
+  cast: the hit may have used it up. It says "can't tell" (no glow); track it in the Cooldown
+  Manager for an exact answer.
 - Fixed: a spell cooldown the game hides counted as ready, so a rule could glow a spell on
   cooldown. The hidden cooldown now switches the glow itself.
 - Fixed: your debuffs on a target were forgotten when you switched targets: switching back to a

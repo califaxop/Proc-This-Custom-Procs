@@ -136,6 +136,34 @@ def _():
     assert(S.HasBuff("Lightning Bolt") == nil, "a cast alone doesn't prove a buff")
     """
 
+@test("aura: a buff with charges (Lightning Shield) can't be estimated as on once you're hit")
+def _():
+    """
+    MOCK.buffs["Lightning Shield"] = { duration = 600, expirationTime = MOCK.now + 600, applications = 3 }
+    S.HasBuff("Lightning Shield")                          -- learns: 600 s, has charges
+    MOCK.Combat(true)
+    MOCK.now = MOCK.now + 1
+    local has, how = S.HasBuff("Lightning Shield", true); assert(has == true and how == "estimate")
+    MOCK.Hit("HEAL"); assert(S.HasBuff("Lightning Shield", true) == true, "a heal uses no charge")
+    MOCK.now = MOCK.now + 1; MOCK.Hit()
+    has, how = S.HasBuff("Lightning Shield", true); assert(has == nil and how == "unknown", "seen on, then hit")
+    MOCK.now = MOCK.now + 1; MOCK.Cast(945)
+    has, how = S.HasBuff("Lightning Shield", true); assert(has == true and how == "estimate", "recast: full charges")
+    MOCK.now = MOCK.now + 1; MOCK.Hit(MOCK.Secret("WOUND"))
+    has = S.HasBuff("Lightning Shield", true); assert(has == nil, "a hidden hit counts too")
+    MOCK.Rule({ spell = "Lightning Shield", auras = { { kind = "buff", name = "Lightning Shield", unit = "player", mode = "missing" } } })
+    G.Update(); assert(MOCK.Glow("ActionButton1") == "", "can't tell -> no glow")
+    """
+
+@test("aura: a buff without charges stays estimated as on when you're hit")
+def _():
+    """
+    MOCK.buffs["Water Walking"] = { duration = 600, expirationTime = MOCK.now + 600 }
+    S.HasBuff("Water Walking")
+    MOCK.Combat(true); MOCK.now = MOCK.now + 1; MOCK.Hit()
+    local has, how = S.HasBuff("Water Walking"); assert(has == true and how == "estimate")
+    """
+
 @test("aura: the Cooldown Manager answers exactly in combat")
 def _():
     """

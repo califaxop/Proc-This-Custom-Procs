@@ -98,20 +98,31 @@ end
 --   seen[name] = { present, at, expires (GetTime; 0 = no end time) }: the last direct read
 --   castAt[name] = when you last cast a spell of that name (the cast doesn't prove the buff landed)
 --   buffDur[name] = how long it lasts, from direct reads
+--   charged[name] = it has charges or stacks when read (e.g. Lightning Shield): being hit can use it
+--     up before its time runs out, so once you're hit after the cast or read, it's unknown
 -- Estimates (how = "estimate"):
 --   - you cast it after the last read, and its duration is known: on until that runs out, then off
---   - read on with an end time: on until then, then off (it can end sooner: a dispel, charges used)
+--   - read on with an end time: on until then, then off (it can end sooner: a dispel)
 --   - read on with no end time: on
 --   - read off, and it's the rule's own spell (only your cast puts it on you): off until you cast it
 -- Anything else is unknown (how = "unknown"): never treated as on or as off.
-local seen, castAt, buffDur = {}, {}, {}
+local seen, castAt, buffDur, charged = {}, {}, {}, {}
+local lastHit = 0 -- anything that landed on you, or tried to (UNIT_COMBAT), for charged buffs
+
+-- a count on the aura (stacks or charges); a hidden one counts as a count
+local function Counted(v) return v ~= nil and (not Readable(v) or (type(v) == "number" and v > 0)) end
 
 local function Remember(name, present, aura)
   local expires = 0
   if aura and Readable(aura.expirationTime) and type(aura.expirationTime) == "number" then expires = aura.expirationTime end
   if aura and Readable(aura.duration) and type(aura.duration) == "number" and aura.duration > 0 then buffDur[name] = aura.duration end
+  if aura and (Counted(aura.applications) or Counted(aura.charges)) then charged[name] = true end
   seen[name] = { present = present, at = GetTime(), expires = present and expires or nil }
 end
+
+-- a charged buff, and you've been hit since `t`: it may be used up
+local USED_UP = "it has charges, and you've been hit since (track it in the Cooldown Manager for an exact answer)"
+local function MaybeUsedUp(name, t) return charged[name] and lastHit > t end
 
 -- Is buff `name` on you? Returns true/false or nil (can't tell), how it knows ("aura", "cdm",
 -- "estimate", "unknown"), and a detail for the settings window. selfOnly: it's the rule's own spell.
@@ -126,11 +137,15 @@ function S.HasBuff(name, selfOnly)
   if c and (not last or c >= last.at) then
     local d = buffDur[name]
     if not d then return nil, "unknown", "cast, but how long it lasts isn't known yet" end
-    if now - c <= d then return true, "estimate", format("from your cast %d s ago (lasts %d s)", now - c, d) end
+    if now - c <= d then
+      if MaybeUsedUp(name, c) then return nil, "unknown", USED_UP end
+      return true, "estimate", format("from your cast %d s ago (lasts %d s)", now - c, d)
+    end
     return false, "estimate", format("your cast %d s ago has run out (lasts %d s)", now - c, d)
   end
   if last then
     if last.present then
+      if (last.expires == 0 or now < last.expires) and MaybeUsedUp(name, last.at) then return nil, "unknown", USED_UP end
       if (last.expires or 0) == 0 then return true, "estimate", "seen on you, with no end time" end
       if now < last.expires then return true, "estimate", format("seen on you, ends in %d s", last.expires - now) end
       return false, "estimate", "seen on you, and its time has run out"
@@ -471,6 +486,7 @@ end
 local lastMelee = 0
 local MELEE_ACTIONS = { WOUND = true, DODGE = true, PARRY = true, BLOCK = true, MISS = true }
 function S.OnUnitCombat(action, descriptor, amount, school)
+  if not (Readable(action) and (action == "HEAL" or action == "ENERGIZE")) then lastHit = GetTime() end
   if Readable(action) then
     if not MELEE_ACTIONS[action] then return end   -- e.g. a heal
     if action == "WOUND" and Readable(school) and school ~= 1 then return end -- spell damage, not melee

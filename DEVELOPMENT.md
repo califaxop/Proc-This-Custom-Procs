@@ -103,9 +103,12 @@ in the explanations: they can be wrong (see below).
 
 Buff estimates (no Cooldown Manager), from what was last read and your casts since:
 - you cast it after the last read, and its duration is known (from a read): on for that long,
-  then off. Can be wrong: the cast may not have applied it; charges may end it early.
-- last read on, with an end time: on until then, then off. Can be wrong: dispelled, cancelled,
-  charges used up.
+  then off. Can be wrong: the cast may not have applied it.
+- last read on, with an end time: on until then, then off. Can be wrong: dispelled, cancelled.
+- a buff read with charges or stacks (e.g. Lightning Shield): once anything hits you after the
+  cast or read (`UNIT_COMBAT` on you, except heals and energize; a hidden kind counts), UNKNOWN:
+  the hit may have used the last charge. (Found in game, 1.16.0 test: the estimate said "on" after
+  the shield was used up.)
 - last read on, no end time: on. Can be wrong: removed.
 - last read off, and it's the rule's own spell (only your cast puts it on you): off until you
   cast it. Can be wrong: someone else casts it on you.
@@ -182,6 +185,15 @@ values are tables; the real client is stricter, so the tests prove logic, not cl
    "decided by the game", note it (the cooldown was hidden), and whether the glow dips during the
    global cooldown.
 7. Any status showing "can't tell" or "error": screenshot it with the rule's settings.
+
+Results (1.16.0 test build, Shaman, solo):
+- 2, 4: pass. Lightning Shield tracked: "on you / not on you (from the Cooldown Manager)", glow
+  exact.
+- 3: pass after a fix. Not tracked: "not on you (estimate: not on you when last seen …)" glows;
+  cast: "on you (estimate: from your cast 4 s ago (lasts 600 s))", no glow. But 16 s later the
+  shield's charges were used up and the estimate still said "on". Fixed: charged buffs become
+  "can't tell" once you're hit.
+- 1, 5, 6, 7: pending.
 
 ## Known limitations
 

@@ -17,7 +17,7 @@ test or read it. `issecretvalue(v)` says whether it is.
 | API | Signature | Secret when | Proc This! uses it for | Status |
 |---|---|---|---|---|
 | `C_Secrets.ShouldAurasBeSecret()` | → bool | never | in combat: don't query auras | In use |
-| `C_UnitAuras.GetAuraDataBySpellName(unit, name, filter)` | → AuraData or nil | unit aura restricted; in combat Forever errors ("Auras cannot be accessed when secret") | out of combat: buffs and debuffs, their `duration` and `expirationTime` (for estimates) | In use (the combat error is quoted from an in-game report); `expirationTime` for estimates: Docs |
+| `C_UnitAuras.GetAuraDataBySpellName(unit, name, filter)` | → AuraData or nil | unit aura restricted; in combat Forever errors ("Auras cannot be accessed when secret") | out of combat: buffs and debuffs, their `duration`, `expirationTime`, `applications` and `charges` (for estimates) | In use (the combat error is quoted from an in-game report); `expirationTime`, `applications`, `charges` for estimates: Docs |
 | `C_UnitAuras.GetAuraDataByIndex(unit, i, filter)` | → AuraData or nil | as above | fallback buff read; `/pt auras` | In use |
 | `canaccessvalue(v)` | → bool | — | an aura record with hidden fields | Docs |
 | `C_CooldownViewer.GetCooldownViewerCooldownInfo(id)`, the viewers `BuffIconCooldownViewer` / `BuffBarCooldownViewer` and their icons' `cooldownID`, `isActive`, `auraInstanceID` | — | `auraInstanceID` can be hidden | your tracked buffs and debuffs in combat | In use (verified in game with Stormstrike, Lightning Shield) |
@@ -45,7 +45,7 @@ test or read it. `issecretvalue(v)` says whether it is.
 | `UnitHealth`, `UnitHealthMax`, `UnitHealthPercent(unit, usePredicted, curve)` | — | health hidden in combat | health rows: readable, else a step curve as a gate | In use |
 | `UnitPower`, `UnitPowerMax`, `UnitPowerPercent(unit, type, unmodified, curve)` | — | your mana is always hidden on Forever; others at times | mana / combo / rage / energy rows | Verified in game (`/pt power`) |
 | `GetComboPoints("player", "target")` | → number | can be hidden | combo points | In use |
-| `UNIT_COMBAT` (unit, action, descriptor, amount, school) | event | fields can be hidden (then counted as melee) | "Being hit in melee" | In use |
+| `UNIT_COMBAT` (unit, action, descriptor, amount, school) | event | fields can be hidden (then counted as melee, and as a hit) | "Being hit in melee"; hits that may use up a charged buff | In use |
 
 ## Glow
 

@@ -76,14 +76,14 @@ C_Spell = {
 C_SpellBook = { FindSpellBookSlotForSpell = function() return 1 end }
 
 -- auras -----------------------------------------------------------------------------------
--- MOCK.buffs[name] = { duration, expirationTime } (on you); MOCK.targetDebuffs[name] = { mine = true };
+-- MOCK.buffs[name] = { duration, expirationTime, applications (stacks / charges) } (on you); MOCK.targetDebuffs[name] = { mine = true };
 -- in combat (MOCK.locked) the game refuses aura queries
 C_Secrets = { ShouldAurasBeSecret = function() return MOCK.locked end }
 C_UnitAuras = {
   GetAuraDataBySpellName = function(unit, name, filter)
     if MOCK.locked then error("Auras cannot be accessed when secret") end
     if unit == "player" and filter == "HELPFUL" then
-      local b = MOCK.buffs[name]; if b then return { name = name, duration = b.duration, expirationTime = b.expirationTime } end
+      local b = MOCK.buffs[name]; if b then return { name = name, duration = b.duration, expirationTime = b.expirationTime, applications = b.applications or 0 } end
       return nil
     end
     if unit == "target" and filter and filter:find("HARMFUL") then
@@ -135,6 +135,8 @@ function MOCK.Fire(event, ...)
 end
 -- you cast a spell (UNIT_SPELLCAST_SUCCEEDED: unit, castGUID, spellID)
 function MOCK.Cast(id) MOCK.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast", id) end
+-- something hits you (UNIT_COMBAT: unit, action, descriptor, amount, school)
+function MOCK.Hit(action) MOCK.Fire("UNIT_COMBAT", "player", action or "WOUND", "", 10, 1) end
 -- combat: the game starts hiding auras
 function MOCK.Combat(on)
   MOCK.locked, MOCK.inCombat = on, on
