@@ -492,7 +492,7 @@ local function BuildEditor(p)
 
   -- live status: glowing or not and why, buttons, how each aura is read right now
   local HOW = { aura = "read directly", exact = "read directly", hidden = "seen (details hidden)",
-    cdm = "from the Cooldown Manager", estimate = "estimate", unknown = "can't tell in combat" }
+    cdm = "from the Cooldown Manager", estimate = "estimate", unknown = "in combat" }
   local R = ns.Result
   -- a rule's result as one line
   local function ResultLine(st, why, gates)
