@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.0
+
+- "Report a bug" now sits at the top right of the settings window, next to the ×, and opens a bug report window (like Questie's trace export): the form's link to copy at the top, then one line to paste into the form with your version, the game client, what Proc This! sees right now, each rule's status and your rules; never your name, realm or guild. Also `/pt report`. The Help page's button and the Share window's report are replaced by it. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
+
 ## 2.0.0 (the development plan: Milestones 1-6)
 
 The first release of the development plan. 1.16.0 to 1.20.0 below were test builds of its

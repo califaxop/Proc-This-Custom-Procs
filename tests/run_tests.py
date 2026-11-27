@@ -742,9 +742,8 @@ def _():
     local said = table.concat(PRINTS, " / ")
     assert(said:find("Lightning Bolt: glowing > not glowing (not castable", 1, true), said)
     SlashCmdList.PROCTHIS("debug"); MOCK.usable = true
-    local text
-    NS.OpenShare = function(t) text = t end
     SlashCmdList.PROCTHIS("report")
+    local text = NS.ShowBugReport().line
     assert(text, "report made: " .. table.concat(PRINTS, " / "))
     assert(text:find("rule 1 Lightning Bolt: true", 1, true) and text:find("rule 2 Purge", 1, true)
       and text:find("not on a shown button", 1, true), text)
@@ -752,17 +751,18 @@ def _():
     assert(text:find("game functions: missing", 1, true), "the mock lacks some")
     """
 
-@test("diagnostics: /pt report opens the real Share window with the report in its box (2.0.0 test build: error)")
+@test("diagnostics: /pt report and the title bar's button open the bug report window: the form's link, the report, counters")
 def _():
     """
     wipe(NS.db.rules)
     MOCK.Rule({ spell = "Lightning Bolt" })
     SlashCmdList.PROCTHIS("report")
-    local win = _G.ProcThisShare
-    assert(win and win._shown, "the window is shown")
-    assert(win.box._text:find("rule 1 Lightning Bolt", 1, true), tostring(win.box._text))
-    assert(win.bug._shown, "with a report: the bug report page button")
-    win:Hide(); NS.OpenShare(); assert(win._shown and win.box._text == "" and not win.bug._shown, "opened again: empty, no bug button")
+    local w = NS.ShowBugReport()
+    assert(w._shown and w.url:find("Proc-This-Custom-Procs/issues/new?template=bug_report.yml", 1, true), w.url)
+    assert(w.lineBox._text and w.lineBox._text:find("rule 1 Lightning Bolt", 1, true), tostring(w.lineBox._text))
+    assert(w.stats[1].text._text:find("Rules: |cffffd2001 (1 on)", 1, true), w.stats[1].text._text)
+    NS.ShowBugReport("idea"); assert(w.url:find("feature_request", 1, true))
+    w:Hide(); NS.OpenShare(); assert(_G.ProcThisShare._shown and _G.ProcThisShare.box._text == "", "Share opens empty")
     """
 
 # ---------------------------------------------------------------------------------------------

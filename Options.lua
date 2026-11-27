@@ -793,15 +793,7 @@ local function PageHelp(page)
     "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      " ..
     "/pt spell <spell>  its cast time, how long it lasts, charges      /pt buttons  what each macro button reads as now      " ..
     "/pt power  what's readable of your power      /pt perf  how long glow updates take      /pt api  which game functions this client has      " ..
-    "/pt debug  print each rule's status changes      /pt report  a report to paste into a bug report")
-  sec("Feedback")
-  local fb = UI.Button(pg, "Report a bug / suggest", 180, function()
-    ns.OpenIssues()
-  end)
-  fb:SetPoint("TOPLEFT", 0, y)
-  local fbn = UI.Text(pg, "note", "Opens a link to copy: a short form for bugs or ideas.")
-  fbn:SetPoint("LEFT", fb, "RIGHT", 10, 0)
-  y = y - 30
+    "/pt debug  print each rule's status changes      /pt report  the bug report (also \"Report a bug\", top right)")
   pg:SetHeight(-y + 10)
   page:SetScript("OnShow", function()
     scroll:SetVerticalScroll(0); scroll.Update()
@@ -813,7 +805,8 @@ end
 local function BuildWindow()
   win = UI.Window("ProcThisWindow", 760, 580)
   win:SetPoint("CENTER")
-  UI.SetHost(win) -- pop-ups (the bug / idea link) sit over this window
+  UI.SetHost(win) -- pop-ups (the bug report, Share) sit over this window
+  UI.HeaderButton(win, "Report a bug", 110, function() ns.ShowBugReport() end)
   local title = UI.Text(win, "title", "Proc This!")
   title:SetPoint("TOPLEFT", 26, -20)
   UI.Text(win, "note", "Custom procs: glow any spell when your conditions are met."):SetPoint("LEFT", title, "RIGHT", 10, -1)
@@ -833,9 +826,8 @@ end
 -- Share rules: export as text (this rule with the rules it uses, or all) or import text someone
 -- sent (Share.lua checks every field; nothing in it is run)
 local share
--- fill: text to put in the box at once, with its note; report: it's a /pt report (the bug report
--- page button shows)
-function ns.OpenShare(fill, note, report)
+-- fill: text to put in the box at once, with its note
+function ns.OpenShare(fill, note)
   if not share then
     share = UI.Popup("ProcThisShare", 580, 196)
     local t = UI.Text(share, "title", "Share rules"); t:SetPoint("TOPLEFT", 20, -18)
@@ -870,11 +862,6 @@ function ns.OpenShare(fill, note, report)
     imp:SetPoint("LEFT", all, "RIGHT", 8, 0)
     local close = UI.Button(share, "Close", 90, function() share:Hide() end)
     close:SetPoint("TOPRIGHT", -20, -118)
-    -- with a /pt report: where to send it
-    local bug = UI.Button(share, "Bug report page", 140, function() ns.OpenIssues() end)
-    bug.tip = "The link to the bug report form, to open in your browser; paste the report into it."
-    bug:SetPoint("TOPLEFT", one, "BOTTOMLEFT", 0, -10)
-    share.bug = bug
     share.Reset = function()
       text = ""; box:SetText("")
       msg:SetText("Export rules to share them, or paste rules text and Import.")
@@ -883,7 +870,6 @@ function ns.OpenShare(fill, note, report)
   share.Reset()
   share:Show()
   if fill then share.Fill(fill, note) end
-  share.bug:SetShown(report == true)
 end
 
 -- /pt report: what a bug report needs, as one text to copy: the version and client, what the game
@@ -913,9 +899,24 @@ local function Report()
   if #ns.Glow.errors == 0 then add("errors caught: none") end
   for _, e in ipairs(ns.Glow.errors) do add("error (%s, x%d, %.0f s ago): %s", e.where, e.n, GetTime() - e.at, e.msg) end
   add("rules: %s", ns.Share.Export(ns.db.rules))
-  -- one line in the box (an edit box of one line), " // " between parts; a stray | doubled (the
-  -- edit box's way of showing one, rather than starting a colour code)
-  return (table.concat(L, " // "):gsub("|", "||"))
+  -- one line for the box, " // " between parts (the window doubles any |)
+  local on = 0
+  for _, r in ipairs(ns.db.rules) do if r.enabled then on = on + 1 end end
+  return table.concat(L, " // "), {
+    { "Interface\\Icons\\Spell_Nature_LightningShield", "Rules", format("%d (%d on)", #ns.db.rules, on) },
+    { "Interface\\Icons\\INV_Misc_Note_01", "Errors caught", #ns.Glow.errors },
+    { "Interface\\Icons\\INV_Misc_PocketWatch_01", "Cooldown Manager", (GetCVarBool and GetCVarBool("cooldownViewerEnabled")) and "on" or "off" },
+    { "Interface\\Icons\\Spell_Shadow_DetectInvisibility", "Auras hidden now", ns.State.AurasLocked() and "yes" or "no" },
+  }
+end
+local BUG = { name = "ProcThisReportWindow", title = "Proc This! Bug Report",
+  repo = "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new",
+  included = "Included: Proc This!'s version, the game client, your class, what the game lets it see, your action buttons' spells, each rule's status, the errors caught and your rules. Never: your name, realm, guild or other players.",
+  build = Report }
+function ns.ShowBugReport(kind)
+  local okV, version = ns.API.Call("AddOnMetadata", ns.name, "Version")
+  BUG.version = okV and version or nil
+  return UI.ShowBugReport(BUG, kind)
 end
 
 function ns.OpenOptions()
@@ -1031,9 +1032,7 @@ SlashCmdList.PROCTHIS = function(msg)
     return
   end
   if (msg or ""):lower():match("^report") then
-    local ok, text = pcall(Report)
-    if not ok then ns.Print("report failed: " .. tostring(text)); return end
-    ns.OpenShare(text, "Your report is in the box: press Ctrl+C to copy it. \"Bug report page\" gives the link to the form: open it in your browser and paste the report there.", true)
+    ns.ShowBugReport()
     return
   end
   if (msg or ""):lower():match("^perf") then for _, l in ipairs(ns.Glow.PerfReport()) do ns.Print(l) end return end
