@@ -793,7 +793,7 @@ local function PageHelp(page)
     "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      " ..
     "/pt spell <spell>  its cast time, how long it lasts, charges      /pt buttons  what each macro button reads as now      " ..
     "/pt power  what's readable of your power      /pt perf  how long glow updates take      /pt api  which game functions this client has      " ..
-    "/pt debug  print each rule's status changes      /pt report  the bug report (also \"Report a bug\", top right)")
+    "/pt debug  print each rule's status changes      /pt report  bugs & feedback (also the button at the top right)")
   pg:SetHeight(-y + 10)
   page:SetScript("OnShow", function()
     scroll:SetVerticalScroll(0); scroll.Update()
@@ -806,7 +806,7 @@ local function BuildWindow()
   win = UI.Window("ProcThisWindow", 760, 580)
   win:SetPoint("CENTER")
   UI.SetHost(win) -- pop-ups (the bug report, Share) sit over this window
-  UI.HeaderButton(win, "Report a bug", 110, function() ns.ShowBugReport() end)
+  UI.HeaderButton(win, "Bugs & Feedback", 130, function() ns.ShowBugReport() end)
   local title = UI.Text(win, "title", "Proc This!")
   title:SetPoint("TOPLEFT", 26, -20)
   UI.Text(win, "note", "Custom procs: glow any spell when your conditions are met."):SetPoint("LEFT", title, "RIGHT", 10, -1)
@@ -909,7 +909,7 @@ local function Report()
     { "Interface\\Icons\\Spell_Shadow_DetectInvisibility", "Auras hidden now", ns.State.AurasLocked() and "yes" or "no" },
   }
 end
-local BUG = { name = "ProcThisReportWindow", title = "Proc This! Bug Report",
+local BUG = { name = "ProcThisReportWindow", title = "Proc This! Bugs & Feedback",
   repo = "https://github.com/califaxop/Proc-This-Custom-Procs/issues/new",
   included = "Included: Proc This!'s version, the game client, your class, what the game lets it see, your action buttons' spells, each rule's status, the errors caught and your rules. Never: your name, realm, guild or other players.",
   build = Report }
