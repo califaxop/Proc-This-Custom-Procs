@@ -36,20 +36,20 @@ Pick a spell, set your conditions, and Proc This! puts Blizzard's own proc glow 
 | `/pt perf` | How long glow updates take (since the last `/pt perf`) |
 | `/pt api` | Which game functions this client has |
 | `/pt debug` | Print each rule's status changes as they happen (again to stop) |
-| `/pt report` | Everything a bug report needs, as one text to copy |
+| `/pt report` | Bugs & Feedback: the form's link and everything a bug report needs, as one line to paste |
 
 ## Good to know
 - In combat the game hides auras from addons: **track them in the Cooldown Manager**, or the rule can't see them.
 - The Cooldown Manager only tracks **your own** spells' auras.
 - Stack counts are hidden in combat, so there are no stack checks: use **Instant** rows instead (e.g. Lightning Bolt is instant = 5 Maelstrom Weapon).
 - A rule that **can't tell** (shown in its status) doesn't glow: the game hides that condition right now. Tracking the aura in the Cooldown Manager usually fixes it.
-- Found a problem? Type `/pt report`, copy the text, and paste it into your bug report.
+- Found a problem? Click **Bugs & Feedback** (top right of the settings) or type `/pt report`: you get the form's link and the line to paste into it.
 
 ## Updates
 New versions come out every **Wednesday at 12:00 UTC** (8 PM Philippine time, 8 AM US Eastern). Urgent fixes ship sooner.
 
 ## Feedback
-Found a bug or have an idea? [Open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose): there's a short form for each. The settings window has a "Feedback" button with this link too.
+Found a bug, have feedback or want a feature? Click **Bugs & Feedback** at the top right of the settings window (or type `/pt report`): it gives you the form's link and, for a bug, a line to paste into it with everything we need. Or [open an issue](https://github.com/califaxop/Proc-This-Custom-Procs/issues/new/choose) directly: there's a short form for each.
 
 ## Recent changes
 - **2.1.0:** "Bugs & Feedback" now sits at the top right of the settings window, next to the ×. It opens a window (like Questie's trace export) with the form's link to copy at the top, for bug reports, feedback and feature requests, and for a bug, one line to paste into the form with your version, the game client, what Proc This! sees right now, each rule's status and your rules; never your name, realm or guild. Also `/pt report`. The Help page's button and the Share window's report are replaced by it. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.
