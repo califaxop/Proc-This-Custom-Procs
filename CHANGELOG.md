@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.0
+
+- A new settings window in the game's own Settings design, the same with any UI installed: the pages down the left (Rules, Edit Rule, Settings, Help), the game's checkboxes, buttons and text boxes, white section headings, a search box. Rules: the list with its buttons beside it; click a rule to select it, Edit rule (or a double-click) to open it. Edit Rule: the whole editor, now the page's full width.
+- Fixed: "Use for all rules" in a rule's Look did nothing (its question window was missing); it now asks, then gives every rule that look.
+- The Share and Bugs & Feedback windows match.
+- FlareUI no longer changes Proc This! (it only styled the window). EllesmereUI's glows and shaped buttons are as before.
+
 ## 2.1.0
 
 - "Bugs & Feedback" now sits at the top right of the settings window, next to the ×. It opens a window (like Questie's trace export) with the form's link to copy at the top, for bug reports, feedback and feature requests, and for a bug, one line to paste into the form with your version, the game client, what Proc This! sees right now, each rule's status and your rules; never your name, realm or guild. Also `/pt report`. The Help page's button and the Share window's report are replaced by it. The settings window is now solid and comes to the front when opened or clicked: with several addons' settings open, they no longer show through each other.

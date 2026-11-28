@@ -82,3 +82,16 @@ test or read it. `issecretvalue(v)` says whether it is.
 - `/pt debug`: each rule's status changes, as they happen.
 - `/pt report`: all of the above that matters for a bug report, as one text.
 - The settings window's live status (per rule): each row's answer and its source.
+
+## Blizzard UI parts (the settings windows, Settings.lua; source: Classic Era 1.15.9's Blizzard_SharedXML and Blizzard_Settings_Shared)
+
+| Part | Use | Status |
+|---|---|---|
+| `SettingsFrameTemplate` (`NineSlice.Text` title, close button) | the settings window and its pop-ups | Verified in WoW Forever (Hereabouts 2.1.0) |
+| Atlases `Options_InnerFrame`, `Options_CategoryHeader_1`/`_2`, `Options_List_Active`, `Options_List_Hover`, `Options_HorizontalDivider` | the settings window's art (the header atlas is taller than its band, which is at its top; the inner frame's divider is at x 212) | Verified in WoW Forever (Hereabouts 2.1.0) |
+| Atlases `checkbox-minimal`, `checkmark-minimal`; `checkmark-minimal-disabled` | checkboxes | Verified in WoW Forever (Hereabouts 2.1.0); the disabled tick: Documentation |
+| `MinimalSliderWithSteppersTemplate`, `MinimalSliderWithSteppersMixin` (`Init`, `RegisterCallback(Event.OnValueChanged)`, `Label.Right`, `FormatValue`) | sliders | Verified in WoW Forever (Hereabouts 2.1.0) |
+| `ScrollFrameTemplate`, `SearchBoxTemplate`, `UIPanelButtonTemplate`, `InputBoxTemplate` | pages, search, buttons, text boxes | Verified in WoW Forever (Hereabouts 2.1.0) |
+| Textures `UI-SpellbookIcon-PrevPage/NextPage-*`, `UI-Common-MouseHilight` | the arrows either side of a choice | Documentation (in the game since vanilla); not yet seen |
+| `ColorPickerFrame` (`SetupColorPickerAndShow`, else the older fields) | colour squares | In use before (the older kit) |
+

@@ -760,7 +760,7 @@ def _():
     local w = NS.ShowBugReport()
     assert(w._shown and w.url:find("Proc-This-Custom-Procs/issues/new?template=bug_report.yml", 1, true), w.url)
     assert(w.lineBox._text and w.lineBox._text:find("rule 1 Lightning Bolt", 1, true), tostring(w.lineBox._text))
-    assert(w.stats[1].text._text:find("Rules: |cffffd2001 (1 on)", 1, true), w.stats[1].text._text)
+    assert(w.stats[1].text._text:find("Rules: |cffffffff1 (1 on)", 1, true), w.stats[1].text._text)
     NS.ShowBugReport("idea"); assert(w.url:find("feature_request", 1, true))
     w:Hide(); NS.OpenShare(); assert(_G.ProcThisShare._shown and _G.ProcThisShare.box._text == "", "Share opens empty")
     """
@@ -794,6 +794,29 @@ def _():
     """
     assert(#NS.db.rules == 1 and NS.db.rules[1].spell == "Lightning Shield", tostring(#NS.db.rules))
     assert(NS.db.rules[1].id ~= nil)
+    """
+
+@test("settings window (2.2.0): the game's Settings design; the rules list, the editor, settings and help; Use for all rules asks first")
+def _():
+    """
+    MinimalSliderWithSteppersMixin = MinimalSliderWithSteppersMixin or { Label = { Right = 2 }, Event = { OnValueChanged = "OnValueChanged" } }
+    local printed
+    local p0 = NS.Print; NS.Print = function(m) printed = m end
+    local w = NS.OpenOptions()
+    NS.Print = p0
+    assert(w and w.index and w._shown, tostring(printed))
+    local where = {}
+    for _, e in ipairs(w.index) do where[e.label] = e.page end
+    assert(where["Your rules"] == 1 and where["Copy from"] == 3 and where["Commands"] == 4, "pages")
+    w.Refresh()
+    for i = 1, 4 do w.Select(i) end
+    w._scripts.OnShow(w)
+    w._scripts.OnUpdate(w, 1)
+    -- a second rule, edited and given the first one's look (it asks first: the old button had no question to ask)
+    NS.db.rules[2] = NS.NewRule(); NS.db.rules[2].spell = "Healing Wave"
+    NS.UI.Confirm("ProcThisConfirm", "q?", function() NS.confirmed = true end)
+    assert(_G.ProcThisConfirm and _G.ProcThisConfirm._shown, "asks")
+    NS.OpenShare(); assert(_G.ProcThisShare._shown)
     """
 
 print(f"\n{count - len(failures)}/{count} passed")

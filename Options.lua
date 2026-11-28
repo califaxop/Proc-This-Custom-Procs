@@ -1,5 +1,5 @@
 -- Proc This!: settings window (/pt, /proc or /procthis, or Esc > Options > AddOns > Proc This!) and start-up.
--- Drawn in the same style as XP Planner (see UI.lua): tabs for Rules, Look and Help.
+-- In the game's own Settings design (Settings.lua): pages for the rules, the selected rule, settings and help.
 local _, ns = ...
 local UI = ns.UI
 
@@ -10,7 +10,7 @@ local win, ui
 local function Rule() return ns.db.rules[selected] end
 local function Field(tbl, key) return { function() local t = tbl(); return t and t[key] end, function(v) local t = tbl(); if t then t[key] = v end end } end
 
-local LIST_W, EDIT_X, EDIT_W, PAGE_H = 196, 220, 486, 470
+local LIST_W = 420 -- the rules list
 
 -- Colour picking: the game's colour picker on a { r, g, b } table
 local function OpenColorPicker(color, onChange)
@@ -78,7 +78,7 @@ local function ColorChoice(parent, width, get, set, custom, withDefault, onChang
   sw:SetScript("OnLeave", function() GameTooltip:Hide() end)
   return f
 end
-local EW = EDIT_W - 16 -- editor content width
+local EW = 610 -- editor content width (the page's)
 
 ---------------------------------------------------------------------------
 -- Rule editor: spell, aura conditions (as many as you like), other conditions, live status
@@ -103,22 +103,22 @@ local IMODES = { { "present", "Active" }, { "missing", "Inactive" } }
 local RMODES = IMODES
 local MODES = IMODES
 
-local R = ns.Result
+local Res = ns.Result
 -- a rule's result as one line (the editor's status, the list's tooltips)
 local function ResultLine(st, why, set)
-  if st == R.GATED then
+  if st == Res.GATED then
     local line = "|cffffd200Glowing when the game says so (hidden values)|r"
     if set.partial then line = line .. " - partly: " .. (why or "?") .. "; it may not glow every time it should" end
     return line
   end
-  if st == R.TRUE then return "|cff60ff60Glowing|r" end
-  if st == R.UNKNOWN then return "|cffffd200Not glowing: can't tell|r - " .. (why or "?") end
-  if st == R.ERROR then return "|cffff6060Not glowing: error|r - " .. (why or "?") end
+  if st == Res.TRUE then return "|cff60ff60Glowing|r" end
+  if st == Res.UNKNOWN then return "|cffffd200Not glowing: can't tell|r - " .. (why or "?") end
+  if st == Res.ERROR then return "|cffff6060Not glowing: error|r - " .. (why or "?") end
   return "Not glowing: " .. (why or "?")
 end
 -- the list's status dots
-local STATUS_DOT = { [R.TRUE] = { 0.38, 1, 0.38 }, [R.GATED] = { 1, 0.82, 0 }, [R.UNKNOWN] = { 1, 0.55, 0.1 },
-  [R.ERROR] = { 1, 0.3, 0.3 } }
+local STATUS_DOT = { [Res.TRUE] = { 0.38, 1, 0.38 }, [Res.GATED] = { 1, 0.82, 0 }, [Res.UNKNOWN] = { 1, 0.55, 0.1 },
+  [Res.ERROR] = { 1, 0.3, 0.3 } }
 
 local function BuildEditor(p)
   local e = { rows = {} }
@@ -126,28 +126,28 @@ local function BuildEditor(p)
   -- header: icon, rule name, enabled
   e.icon = p:CreateTexture(nil, "ARTWORK")
   e.icon:SetSize(26, 26); e.icon:SetPoint("TOPLEFT", 0, 0)
-  e.title = UI.Text(p, "title", "")
+  e.title = UI.Font(p, "GameFontHighlightLarge", "")
   e.title:SetPoint("LEFT", e.icon, "RIGHT", 8, 0); e.title:SetWidth(EW - 140); e.title:SetWordWrap(false)
-  e.enabled = UI.Check(p, "Enabled", Field(Rule, "enabled"), 90, function() ui.Refresh(); Changed() end)
-  e.enabled:SetPoint("TOPRIGHT", p, "TOPLEFT", EW, -3)
+  e.enabled = UI.LabeledCheck(p, "Enabled", Field(Rule, "enabled"), function() ui.Refresh(); Changed() end)
+  e.enabled:SetPoint("TOPRIGHT", p, "TOPLEFT", EW - 60, 0)
 
 
   -- spell
-  e.secSpell = UI.Section(p, "Spell or item to glow", EW)
+  e.secSpell = UI.Font(p, "GameFontHighlightLarge", "Spell or item to glow")
   e.spell = UI.Edit(p, 230, { function() local r = Rule(); return r and r.spell end,
     function(v) local r = Rule(); if r then r.spell = v; ui.Refresh(); Changed() end end },
     "Name or ID", "items")
-  e.spellNote = UI.Text(p, "note", "Every rank glows. Type it, or drag it from your spellbook or bags (trinkets, potions...).")
+  e.spellNote = UI.Note(p, "Every rank glows. Type it, or drag it from your spellbook or bags (trinkets, potions...).")
   e.spellNote:SetWidth(EW - 244)
 
   -- aura conditions, in groups
-  e.secAuras = UI.Section(p, "Buffs, debuffs and health", EW)
-  e.cdmNote = UI.Text(p, "note",
+  e.secAuras = UI.Font(p, "GameFontHighlightLarge", "Conditions")
+  e.cdmNote = UI.Note(p,
     "Conditions come in groups. Each group needs all of its rows, or any one of them; " ..
     "groups are joined by AND (every group) or OR (any group). In combat the game hides auras from addons: " ..
     "add each one to Blizzard's Cooldown Manager (Tracked Buffs or Bars). The dot shows if it's tracked.")
   e.cdmNote:SetWidth(EW)
-  e.none = UI.Text(p, "note", "No buff or debuff conditions yet: start a group below.")
+  e.none = UI.Note(p, "No conditions yet: start a group below.")
   -- "+ New group": name the first condition of a new group
   local newName = ""
   e.newGroupBox = UI.Edit(p, 200, { function() return newName end, function(v) newName = v end },
@@ -167,18 +167,18 @@ local function BuildEditor(p)
   e.newGroupBox:SetScript("OnEnterPressed", function() e.newGroup:Click() end)
 
   -- other conditions
-  e.secOther = UI.Section(p, "Other conditions", EW)
+  e.secOther = UI.Font(p, "GameFontHighlightLarge", "Other conditions")
   e.checks = {}
   for i, c in ipairs(CHECKS) do
-    e.checks[i] = UI.Check(p, c[2], Field(Rule, c[1]), 228, Changed)
+    e.checks[i] = UI.LabeledCheck(p, c[2], Field(Rule, c[1]), Changed)
   end
 
   -- this rule's look
-  e.secLook = UI.Section(p, "Look", EW)
+  e.secLook = UI.Font(p, "GameFontHighlightLarge", "Look")
   e.lookParts = {}
   local function lookField(key) return { function() local r = Rule(); return r and r[key] or ns.NEW_RULE[key] end,
     function(v) local r = Rule(); if r then r[key] = v end end } end
-  local function label(text) local t = UI.Text(p, "note", text); e.lookParts[#e.lookParts + 1] = t; return t end
+  local function label(text) local t = UI.Font(p, "GameFontNormal", text); e.lookParts[#e.lookParts + 1] = t; return t end
   e.lColorL = label("Colour")
   e.color = ColorChoice(p, 140, lookField("color")[1], lookField("color")[2],
     function() local r = Rule(); if not r then return nil end; r.colorCustom = r.colorCustom or { 1, 1, 1 }; return r.colorCustom end,
@@ -224,7 +224,6 @@ local function BuildEditor(p)
     end)
   end)
   e.lookAll.tip = "Give every rule this rule's look (colour, start, pulse, size, intensity)."
-  e.lookAll:SetHeight(18) -- slim, to sit on the Look heading above its line
   e.lookParts[#e.lookParts + 1] = e.lookAll
   e.RefreshLook = function()
     for _, w in ipairs({ e.color, e.style, e.motion, e.size, e.alpha, e.glowType }) do w.Refresh() end
@@ -234,8 +233,8 @@ local function BuildEditor(p)
   end
 
   -- status
-  e.secStatus = UI.Section(p, "Current Rule Status", EW)
-  e.status = UI.Text(p, "line", "")
+  e.secStatus = UI.Font(p, "GameFontHighlightLarge", "Current Rule Status")
+  e.status = UI.Font(p, "GameFontHighlight", "")
   e.status:SetWidth(EW); e.status:SetSpacing(3)
 
   -- one aura row (+ a second line for your debuffs on the target)
@@ -266,7 +265,7 @@ local function BuildEditor(p)
         a.pct = math.max(lo, math.min(hi, math.floor(tonumber(v) or 40))); refresh()
       end },
       "40", false, true)
-    row.pctSign = UI.Text(row, "line", "%")
+    row.pctSign = UI.Font(row, "GameFontHighlight", "%")
     row.pctSign:SetPoint("LEFT", row.pct, "RIGHT", 4, 0)
     -- for Rule rows: which other rule (then Active / Inactive)
     row.ruleOpts = {}
@@ -294,27 +293,24 @@ local function BuildEditor(p)
     row.del:SetPoint("LEFT", row.dot, "RIGHT", 6, 0)
 
     -- second line: your debuff on the target
-    row.mine = UI.Check(row, "Only mine", Field(A, "mine"), 92, refresh)
-    row.mine:SetPoint("TOPLEFT", 10, -26)
-    row.lasts = UI.Text(row, "note", "lasts")
-    row.lasts:SetPoint("LEFT", row.mine, "RIGHT", 2, 0)
+    row.mine = UI.LabeledCheck(row, "Only mine", Field(A, "mine"), refresh)
+    row.mine:SetPoint("TOPLEFT", 4, -24)
+    row.lasts = UI.Note(row, "lasts")
+    row.lasts:SetPoint("LEFT", row.mine.label, "RIGHT", 10, 0)
     row.dur = UI.Edit(row, 34, { function() local a = A(); return a and a.dur end,
       function(v) local a = A(); if a then a.dur = math.max(0, math.min(600, tonumber(v) or 0)); refresh() end end }, "", false, true)
     row.dur:SetPoint("LEFT", row.lasts, "RIGHT", 4, 0)
-    row.after = UI.Text(row, "note", "s, used up after")
+    row.after = UI.Note(row, "s, used up after")
     row.after:SetPoint("LEFT", row.dur, "RIGHT", 4, 0)
     row.charges = UI.Edit(row, 28, { function() local a = A(); return a and a.charges end,
       function(v) local a = A(); if a then a.charges = math.max(0, math.min(20, math.floor(tonumber(v) or 0))); refresh() end end }, "", false, true)
     row.charges:SetPoint("LEFT", row.after, "RIGHT", 4, 0)
-    row.casts = UI.Text(row, "note", "casts of")
+    row.casts = UI.Note(row, "casts of")
     row.casts:SetPoint("LEFT", row.charges, "RIGHT", 4, 0)
     row.usedBy = UI.Edit(row, 92, { function() local a = A(); return a and a.usedBy end,
       function(v) local a = A(); if a then a.usedBy = v; refresh() end end }, "this spell", false)
     row.usedBy:SetPoint("LEFT", row.casts, "RIGHT", 4, 0)
     row.extra = { row.mine, row.lasts, row.dur, row.after, row.charges, row.casts, row.usedBy }
-    for _, w in ipairs(row.extra) do
-      if w.SetScript and w ~= row.mine and w ~= row.lasts and w ~= row.after and w ~= row.casts then end
-    end
     row.dur.tip = "Backup when it isn't in the Cooldown Manager: how long it lasts after you cast it (0 = auto)."
     row.Refresh = function()
       local a = A()
@@ -363,7 +359,7 @@ local function BuildEditor(p)
       local tracked = an and ns.State.Tracked(an) or false
       row.dot.tracked = tracked
       if tracked then row.dot.tex:SetVertexColor(0.35, 0.9, 0.35) else row.dot.tex:SetVertexColor(0.9, 0.3, 0.25) end
-      row:SetHeight(tdebuff and 50 or 26)
+      row:SetHeight(tdebuff and 54 or 28)
     end
     return row
   end
@@ -374,8 +370,8 @@ local function BuildEditor(p)
     local bx = CreateFrame("Frame", nil, p, "BackdropTemplate")
     bx:SetFrameLevel(math.max(1, p:GetFrameLevel()))
     bx:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    UI.Skin(function(th) bx:SetBackdropColor(UI.RGB(th.box, 0.10)); bx:SetBackdropBorderColor(UI.RGB(th.accent, 0.55)) end)
-    bx.title = UI.Text(bx, "value", "Group " .. g)
+    bx:SetBackdropColor(0, 0, 0, 0.25); bx:SetBackdropBorderColor(0.45, 0.45, 0.45, 0.8)
+    bx.title = UI.Font(bx, "GameFontNormal", "Group " .. g)
     bx.title:SetPoint("TOPLEFT", 10, -9)
     bx.mode = UI.Toggle(p, 210, { { "all", "All of these must hold" }, { "any", "Any one of these is enough" } },
       { function() local r = Rule(); return r and r.groupModes and r.groupModes[g] or "all" end,
@@ -398,7 +394,7 @@ local function BuildEditor(p)
     bx.join = UI.Toggle(p, 64, { { "and", "AND" }, { "or", "OR" } },
       { function() local r = Rule(); return r and r.join or "and" end, function(v) local r = Rule(); if r then r.join = v end end },
       function() ui.Refresh(); Changed() end, "How groups combine: AND = every group must hold, OR = any one group is enough.")
-    bx.joinNote = UI.Text(p, "note", "")
+    bx.joinNote = UI.Note(p, "")
     bx.joinNote:SetPoint("LEFT", bx.join, "RIGHT", 8, 0)
     bx.parts = { bx, bx.mode, bx.add, bx.addBtn, bx.join, bx.joinNote }
     return bx
@@ -407,7 +403,7 @@ local function BuildEditor(p)
   -- place everything top to bottom; the aura list is as long as it needs to be
   e.Layout = function()
     local r = Rule()
-    local y = -40
+    local y = -44
     local function place(w, x, dy) w:ClearAllPoints(); w:SetPoint("TOPLEFT", p, "TOPLEFT", x, y); y = y - dy end
     place(e.secSpell, 0, 30)
     e.spell:ClearAllPoints(); e.spell:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y)
@@ -461,20 +457,20 @@ local function BuildEditor(p)
     place(e.secOther, 0, 30)
     for i, cb in ipairs(e.checks) do
       cb:ClearAllPoints()
-      cb:SetPoint("TOPLEFT", p, "TOPLEFT", (i % 2 == 1) and 0 or 240, y - math.floor((i - 1) / 2) * 24)
+      cb:SetPoint("TOPLEFT", p, "TOPLEFT", (i % 2 == 1) and 0 or 300, y - math.floor((i - 1) / 2) * 28)
     end
-    y = y - 3 * 24 - 12
+    y = y - 3 * 28 - 12
     -- "Use for all rules" sits at the right end of the Look heading
-    e.lookAll:ClearAllPoints(); e.lookAll:SetPoint("TOPRIGHT", p, "TOPLEFT", EW, y + 1)
+    e.lookAll:ClearAllPoints(); e.lookAll:SetPoint("TOPRIGHT", p, "TOPLEFT", EW, y + 2)
     place(e.secLook, 0, 30)
     local function pair(lbl, w, x) lbl:ClearAllPoints(); lbl:SetPoint("TOPLEFT", p, "TOPLEFT", x, y - 4)
-      w:ClearAllPoints(); w:SetPoint("TOPLEFT", p, "TOPLEFT", x + 92, y) end
+      w:ClearAllPoints(); w:SetPoint("TOPLEFT", p, "TOPLEFT", x + 110, y) end
     pair(e.lColorL, e.color, 0)
-    e.lookTest:ClearAllPoints(); e.lookTest:SetPoint("TOPLEFT", p, "TOPLEFT", 270, y)
+    e.lookTest:ClearAllPoints(); e.lookTest:SetPoint("TOPLEFT", p, "TOPLEFT", 300, y)
     y = y - 28
-    pair(e.lStyleL, e.style, 0); pair(e.lMotionL, e.motion, 250)
+    pair(e.lStyleL, e.style, 0); pair(e.lMotionL, e.motion, 300)
     y = y - 28
-    pair(e.lSizeL, e.size, 0); pair(e.lAlphaL, e.alpha, 250)
+    pair(e.lSizeL, e.size, 0); pair(e.lAlphaL, e.alpha, 300)
     local eui = ns.HasEllesmere()
     e.lGlowL:SetShown(eui and Rule() ~= nil); e.glowType:SetShown(eui and Rule() ~= nil)
     if eui then y = y - 28; pair(e.lGlowL, e.glowType, 0) end
@@ -527,9 +523,9 @@ local function BuildEditor(p)
         if other then
           local st2, why2 = ns.Glow.Evaluate(other)
           lines[#lines + 1] = format("Rule %s: %s", ns.RuleLabel(other),
-            st2 == R.GATED and "|cffffd200active when the game says so (hidden values)|r"
-            or st2 == R.TRUE and "|cff60ff60active|r"
-            or (st2 == R.UNKNOWN or st2 == R.ERROR) and format("|cffffd200can't tell|r (%s)", why2 or "?")
+            st2 == Res.GATED and "|cffffd200active when the game says so (hidden values)|r"
+            or st2 == Res.TRUE and "|cff60ff60active|r"
+            or (st2 == Res.UNKNOWN or st2 == Res.ERROR) and format("|cffffd200can't tell|r (%s)", why2 or "?")
             or "not active")
         end
       elseif ns.State.POWER[a.kind] then
@@ -574,102 +570,112 @@ end
 -- Rules list
 ---------------------------------------------------------------------------
 local rows = {}
-local function BuildList(p)
+local function BuildList(p, top)
   local l = {}
-  local sec = UI.Section(p, "Rules", LIST_W); sec:SetPoint("TOPLEFT", 0, 0)
   l.box = CreateFrame("Frame", nil, p, "BackdropTemplate")
-  l.box:SetPoint("TOPLEFT", 0, -32); l.box:SetSize(LIST_W, 280)
+  l.box:SetPoint("TOPLEFT", 7, top); l.box:SetSize(LIST_W, 380)
   l.box:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-  UI.Skin(function(th) l.box:SetBackdropColor(0, 0, 0, 0.35); l.box:SetBackdropBorderColor(UI.RGB(th.accent, 0.6)) end)
-  local scroll, content = UI.Scroll(l.box, LIST_W - 8, 272)
-  scroll:SetPoint("TOPLEFT", 4, -4)
+  l.box:SetBackdropColor(0, 0, 0, 0.3); l.box:SetBackdropBorderColor(0.45, 0.45, 0.45, 0.8)
+  local scroll = CreateFrame("ScrollFrame", nil, l.box, "ScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 4, -4); scroll:SetPoint("BOTTOMRIGHT", -26, 4)
+  local content = CreateFrame("Frame", nil, scroll)
+  content:SetSize(LIST_W - 32, 1)
+  scroll:SetScrollChild(content)
   l.content, l.scroll = content, scroll
 
+  -- the buttons, in a column right of the list
+  local X = LIST_W + 24
   local function Added(r)
     if ns.char then ns.char.fresh = nil end -- (you're making this character's rules yourself)
     table.insert(ns.db.rules, r)
     selected = #ns.db.rules; ui.Refresh(); Changed()
+    if win then win.Select(2) end
   end
-  l.add = UI.Button(p, "+ Add rule", 96, function() Added(ns.NewRule()) end)
-  l.add:SetPoint("TOPLEFT", l.box, "BOTTOMLEFT", 0, -8)
-  l.remove = UI.Button(p, "Remove", 96, function()
+  l.add = UI.Button(p, "+ Add rule", 170, function() Added(ns.NewRule()) end)
+  l.add:SetPoint("TOPLEFT", X, top)
+  l.edit = UI.Button(p, "Edit rule", 170, function() if win then win.Select(2) end end)
+  l.edit.tip = "Open the selected rule (or click it twice)."
+  l.edit:SetPoint("TOPLEFT", l.add, "BOTTOMLEFT", 0, -6)
+  -- a copy of this rule, and its place (priority: when several rules glow one spell, the higher one
+  -- wins: its look, and it's checked first)
+  l.dup = UI.Button(p, "Duplicate", 170, function()
+    local i = ns.DuplicateRule(selected)
+    if i then selected = i; ui.Refresh(); Changed() end
+  end)
+  l.dup.tip = "Add a copy of this rule right below it."
+  l.dup:SetPoint("TOPLEFT", l.edit, "BOTTOMLEFT", 0, -6)
+  l.up = UI.Button(p, "Up", 83, function() selected = ns.MoveRule(selected, -1); ui.Refresh(); Changed() end)
+  l.up.tip = "Move this rule up. When several rules glow one spell, the higher one comes first (its look wins)."
+  l.up:SetPoint("TOPLEFT", l.dup, "BOTTOMLEFT", 0, -6)
+  l.down = UI.Button(p, "Down", 83, function() selected = ns.MoveRule(selected, 1); ui.Refresh(); Changed() end)
+  l.down.tip = l.up.tip:gsub("^Move this rule up", "Move this rule down")
+  l.down:SetPoint("LEFT", l.up, "RIGHT", 4, 0)
+  l.remove = UI.Button(p, "Remove", 170, function()
     if ns.db.rules[selected] then
       table.remove(ns.db.rules, selected)
       selected = math.max(1, math.min(selected, #ns.db.rules)); ui.Refresh(); Changed()
     end
   end)
-  l.remove:SetPoint("LEFT", l.add, "RIGHT", 4, 0)
-  -- a copy of this rule, and its place (priority: when several rules glow one spell, the higher one
-  -- wins: its look, and it's checked first)
-  l.dup = UI.Button(p, "Duplicate", 96, function()
-    local i = ns.DuplicateRule(selected)
-    if i then selected = i; ui.Refresh(); Changed() end
-  end)
-  l.dup.tip = "Add a copy of this rule right below it."
-  l.dup:SetPoint("TOPLEFT", l.add, "BOTTOMLEFT", 0, -4)
-  l.up = UI.Button(p, "Up", 46, function() selected = ns.MoveRule(selected, -1); ui.Refresh(); Changed() end)
-  l.up.tip = "Move this rule up. When several rules glow one spell, the higher one comes first (its look wins)."
-  l.up:SetPoint("LEFT", l.dup, "RIGHT", 4, 0)
-  l.down = UI.Button(p, "Down", 46, function() selected = ns.MoveRule(selected, 1); ui.Refresh(); Changed() end)
-  l.down.tip = l.up.tip:gsub("^Move this rule up", "Move this rule down")
-  l.down:SetPoint("LEFT", l.up, "RIGHT", 4, 0)
+  l.remove:SetPoint("TOPLEFT", l.up, "BOTTOMLEFT", 0, -6)
   -- a new rule from a template
   local tplOpts, tpl = {}, ns.TEMPLATES[1][1]
   for _, t in ipairs(ns.TEMPLATES) do tplOpts[#tplOpts + 1] = { t[1], t[2] } end
-  l.tpl = UI.Toggle(p, 150, tplOpts, { function() return tpl end, function(v) tpl = v end }, nil,
-    "Start a rule from a pattern: click to step through them, then + to add it and type the spell.")
-  l.tpl:SetPoint("TOPLEFT", l.dup, "BOTTOMLEFT", 0, -4)
-  l.tplAdd = UI.Button(p, "+", 42, function() Added(ns.NewRule(tpl)) end)
+  local tl = UI.Font(p, "GameFontNormal", "From a template")
+  tl:SetPoint("TOPLEFT", l.remove, "BOTTOMLEFT", 0, -20)
+  l.tpl = UI.Toggle(p, 130, tplOpts, { function() return tpl end, function(v) tpl = v end }, nil,
+    "Start a rule from a pattern: click to step through them (right-click to go back), then + to add it and type the spell.")
+  l.tpl:SetPoint("TOPLEFT", tl, "BOTTOMLEFT", 0, -6)
+  l.tplAdd = UI.Button(p, "+", 36, function() Added(ns.NewRule(tpl)) end)
   l.tplAdd.tip = "Add a rule from this template."
   l.tplAdd:SetPoint("LEFT", l.tpl, "RIGHT", 4, 0)
-  l.share = UI.Button(p, "Share rules...", LIST_W, function() ns.OpenShare() end)
+  l.share = UI.Button(p, "Share rules...", 170, function() ns.OpenShare() end)
   l.share.tip = "Export rules as text to paste into another game, or import rules someone sent you."
-  l.share:SetPoint("TOPLEFT", l.tpl, "BOTTOMLEFT", 0, -4)
+  l.share:SetPoint("TOPLEFT", l.tpl, "BOTTOMLEFT", 0, -20)
 
+  local function paintRow(row, i, r)
+    local on = (i == selected)
+    row.text:SetFontObject(on and "GameFontHighlight" or (r.enabled and "GameFontNormal" or "GameFontDisable"))
+    row.sel:SetShown(on or row.hover)
+    if on or row.hover then row.sel:SetAtlas(on and "Options_List_Active" or "Options_List_Hover") end
+  end
   l.Refresh = function()
-    local th = UI.Theme()
     for i, r in ipairs(ns.db.rules) do
       local row = rows[i]
       if not row then
         row = CreateFrame("Button", nil, content)
-        row:SetSize(LIST_W - 18, 26)
+        row:SetSize(LIST_W - 32, 26)
         row.sel = row:CreateTexture(nil, "BACKGROUND"); row.sel:SetAllPoints()
-        row.bar = row:CreateTexture(nil, "ARTWORK"); row.bar:SetWidth(2)
-        row.bar:SetPoint("TOPLEFT"); row.bar:SetPoint("BOTTOMLEFT")
         row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(20, 20); row.icon:SetPoint("LEFT", 6, 0)
         -- its live status: a dot (see l.RefreshStatus)
         row.dot = row:CreateTexture(nil, "ARTWORK"); row.dot:SetSize(8, 8); row.dot:SetPoint("RIGHT", -6, 0)
         row.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
-        row.text = UI.Text(row, "line", "")
+        row.text = UI.Font(row, "GameFontNormal")
         row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0); row.text:SetPoint("RIGHT", row.dot, "LEFT", -4, 0); row.text:SetWordWrap(false)
         row:SetScript("OnEnter", function(self)
-          self.hover = true; l.Refresh()
+          self.hover = true; paintRow(self, self.i, ns.db.rules[self.i] or {})
           if self.why then GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(self.why, 1, 1, 1, 1, true); GameTooltip:Show() end
         end)
-        row:SetScript("OnLeave", function(self) self.hover = false; l.Refresh(); GameTooltip:Hide() end)
+        row:SetScript("OnLeave", function(self) self.hover = false; paintRow(self, self.i, ns.db.rules[self.i] or {}); GameTooltip:Hide() end)
+        row:SetScript("OnDoubleClick", function() if win then win.Select(2) end end)
         rows[i] = row
       end
+      row.i = i
       row:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
       local name = ns.RuleSpellName(r)
       row.icon:SetTexture(name and ns.SpellIcon(name) or "Interface\\Icons\\INV_Misc_QuestionMark")
       row.icon:SetDesaturated(not r.enabled)
       row.text:SetText(ns.RuleLabel(r)) -- (as the Rule rows name it: "Lightning Bolt (#3)")
-      local on = (i == selected)
-      local c = on and th.title or (row.hover and th.hover or (r.enabled and th.line or th.dim))
-      row.text:SetTextColor(UI.RGB(c))
-      row.sel:SetColorTexture(UI.RGB(th.box, on and 0.45 or (row.hover and 0.2 or 0)))
-      row.bar:SetColorTexture(UI.RGB(th.title)); row.bar:SetShown(on)
+      paintRow(row, i, r)
       row:SetScript("OnClick", function() selected = i; ui.Refresh() end)
       row:Show()
     end
     for i = #ns.db.rules + 1, #rows do rows[i]:Hide() end
     content:SetHeight(math.max(1, #ns.db.rules * 26))
     local has = ns.db.rules[selected] ~= nil
-    l.remove.SetActive(has); l.dup.SetActive(has)
+    l.remove.SetActive(has); l.dup.SetActive(has); l.edit.SetActive(has)
     l.up.SetActive(selected > 1 and has); l.down.SetActive(selected < #ns.db.rules)
     l.tpl.Refresh()
     l.RefreshStatus()
-    scroll.Update()
   end
   -- each rule's live status, as a dot: green glowing, yellow the game decides, orange can't tell,
   -- red error, none when it doesn't hold (or is off); its line on hover
@@ -692,47 +698,35 @@ end
 ---------------------------------------------------------------------------
 -- Pages
 ---------------------------------------------------------------------------
-local refreshers = {}
-local function track(w) refreshers[#refreshers + 1] = w; return w end
-
-local function PageRules(pg)
-  local left = CreateFrame("Frame", nil, pg); left:SetPoint("TOPLEFT"); left:SetSize(LIST_W, PAGE_H)
-  local list = BuildList(left)
-  local scroll, content = UI.Scroll(pg, EDIT_W, PAGE_H)
-  scroll:SetPoint("TOPLEFT", EDIT_X, 0)
-  local editor = BuildEditor(content)
-  ui = { Refresh = function() list.Refresh(); editor.Refresh(); editor.UpdateStatus(); scroll.Update() end,
-    Status = function() editor.UpdateStatus(); list.RefreshStatus(); scroll.Update() end }
+local list, editor
+local function PageRules(p, R)
+  R:Section("Your rules")
+  R:Note("Each rule glows a spell or item on your action bars while its conditions hold. Click a rule to select it; Edit rule (or a double-click) opens it. The dot: green glowing, yellow the game decides, orange can't tell, red an error.")
+  list = BuildList(p, R:Space(390))
 end
 
-local function PageSettings(pg)
+local function PageEdit(p)
+  editor = BuildEditor(p)
+  ui = { Refresh = function() list.Refresh(); editor.Refresh(); editor.UpdateStatus() end,
+    Status = function() editor.UpdateStatus(); list.RefreshStatus() end }
+end
+
+local function PageSettings(_, R)
   local function S(key) return { function() return ns.db[key] end, function(v) ns.db[key] = v end } end
-  local sec3 = UI.Section(pg, "Timing", 330); sec3:SetPoint("TOPLEFT", 0, 0)
-  track(UI.Slider(pg, "A melee hit on me counts for", 330, 1, 10, 1, S("meleeWindow"),
-    function(v) return v .. " s" end, Changed)):SetPoint("TOPLEFT", 0, -32)
-  UI.Text(pg, "note", "Used by the \"Being attacked in melee\" condition."):SetPoint("TOPLEFT", 0, -72)
-
-  -- other UIs: found and used on their own (no settings), shown here for information
-  local sec4 = UI.Section(pg, "Other UIs", 330); sec4:SetPoint("TOPLEFT", 370, 0)
-  local function status(label, has, on, off, y)
-    local t = UI.Text(pg, "note", label .. ": " .. (has and on or off))
-    t:SetPoint("TOPLEFT", 370, y); t:SetWidth(330)
-  end
-  status("EllesmereUI", ns.HasEllesmere(), "in use (glows on its bars, its glow styles, its window style)", "not installed", -34)
-  status("FlareUI", ns.HasFlare(), ns.HasEllesmere() and "installed (EllesmereUI's window style is used)" or "in use (its window style)",
-    "not installed", -58)
-
-  local note = UI.Text(pg, "note", "Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, in the Rules tab.")
-  note:SetPoint("TOPLEFT", 0, -112); note:SetWidth(700)
-
+  R:Section("Timing")
+  R:Slider("A melee hit on me counts for", 1, 10, 1, S("meleeWindow"), function(v) return v .. " s" end, Changed,
+    "Used by the \"Being attacked in melee\" condition.")
+  R:Section("Other UIs")
+  local eui = R:Row("EllesmereUI", "Found and used on its own: no settings.")
+  UI.Note(eui, ns.HasEllesmere() and "In use: glows on its bars, and its glow styles in each rule's Look." or "Not installed."):SetPoint("LEFT", R.ctrl, 0)
+  R:Note("Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, under Edit Rule.")
   -- rules are per character: copy another character's into this one
-  local sec5 = UI.Section(pg, "Rules on other characters", 700); sec5:SetPoint("TOPLEFT", 0, -150)
-  local here = UI.Text(pg, "line", ""); here:SetPoint("TOPLEFT", 0, -182); here:SetWidth(700)
+  R:Section("Rules on other characters")
+  local here = R:Note("")
   local others, pick = {}, nil
-  local from = track(UI.Toggle(pg, 300, others, { function() return pick end, function(v) pick = v end }, nil,
-    "Which character's rules to copy. Click to switch; right-click to go back."))
-  from:SetPoint("TOPLEFT", 0, -206)
-  local copy = UI.Button(pg, "Copy to this character", 170, function()
+  local from, row = R:Toggle("Copy from", 260, others, { function() return pick end, function(v) pick = v end }, nil,
+    "Which character's rules to copy.")
+  local copy = UI.Button(row, "Copy to this character", 170, function()
     local src = pick and ns.RulesOf(pick)
     if not src then return end
     local n = ns.AddRuleCopies(src)
@@ -741,8 +735,7 @@ local function PageSettings(pg)
     Changed(); from.Refresh()
   end)
   copy:SetPoint("LEFT", from, "RIGHT", 8, 0)
-  local cnote = UI.Text(pg, "note", "Copies are added to this character's rules (nothing is replaced); remove the ones you don't need in the Rules tab.")
-  cnote:SetPoint("TOPLEFT", 0, -236); cnote:SetWidth(700)
+  R:Note("Copies are added to this character's rules (nothing is replaced); remove the ones you don't need under Rules.")
   local r0 = from.Refresh
   from.Refresh = function()
     wipe(others)
@@ -753,74 +746,63 @@ local function PageSettings(pg)
     if #others == 0 then others[1] = { nil, "(no other character has rules yet)" } end
     here:SetText(format("Rules on %s: %d", ns.CharKey(), #ns.db.rules))
     r0()
-    copy.SetActive(pick ~= nil)
+    copy:SetEnabled(pick ~= nil)
   end
 end
 
-local function PageHelp(page)
-  -- (more than fits: it scrolls)
-  local scroll, pg = UI.Scroll(page, 708, PAGE_H)
-  scroll:SetPoint("TOPLEFT")
-  local y = 0
-  local function sec(t) local s = UI.Section(pg, t, 684); s:SetPoint("TOPLEFT", 0, y); y = y - 32 end
-  local function para(t, color)
-    local fs = UI.Text(pg, color or "line", t); fs:SetWidth(684); fs:SetPoint("TOPLEFT", 0, y)
-    y = y - (fs:GetStringHeight() or 14) - 8
+local function PageHelp(p, R)
+  local function para(t, note)
+    local fs = note and UI.Note(p, t, 600) or UI.Font(p, "GameFontHighlight", t)
+    fs:SetWidth(600); fs:SetPoint("TOPLEFT", 7, R.y)
+    R:Space((fs:GetStringHeight() or 14) + 10)
   end
-  sec("How rules work")
-  para("Items work too: put a trinket, potion or any usable item in the spell box (type its name or ID, or drag it from your bags) and it glows on your action bars, as itself or in a macro that /use-s it. For an item, \"Off cooldown\" is the item's own cooldown and \"Castable\" means you have it and can use it now.", "note")
+  R:Section("How rules work")
   para("A rule glows a spell on your action bars while ALL of its conditions hold. Add as many buffs and debuffs as you like: " ..
     "each one says who has it (you or your target), whether it's a buff or a debuff, and whether it must be active or missing.")
   para("Example: Lightning Bolt glows while Stormstrike is on your target, Maelstrom Weapon is on you, " ..
-    "and Flame Shock is on your target.", "note")
-  sec("The Cooldown Manager is required in combat")
+    "and Flame Shock is on your target.", true)
+  para("Items work too: put a trinket, potion or any usable item in the spell box (type its name or ID, or drag it from your bags) and it glows on your action bars, as itself or in a macro that /use-s it. For an item, \"Off cooldown\" is the item's own cooldown and \"Castable\" means you have it and can use it now.", true)
+  R:Section("The Cooldown Manager is required in combat")
   para("In combat, the game hides buffs and debuffs from addons. Proc This! follows them through Blizzard's Cooldown Manager instead, " ..
     "so turn it on and add every buff and debuff your rules use to its Tracked Buffs or Tracked Bars. " ..
     "A green dot next to a condition means it's tracked; red means the rule can't see it in combat and won't glow.")
   para("The Cooldown Manager only tracks your own spells' auras. Auras that other players put on you or your target " ..
-    "(for example another player's curse) can only be checked out of combat.", "note")
-  local cdm = UI.Text(pg, "line", ""); cdm:SetPoint("TOPLEFT", 0, y); y = y - 26
-  sec("Commands")
-  para("Every condition reads the same way, left to right: what kind, on whom, what, and its state. [Debuff] [Target] [Stormstrike] [Active]: glows while your Stormstrike debuff is on your target. [Rule] [Lightning Bolt] [Inactive]: while your Lightning Bolt rule isn't active. Click any part to switch it.", "note")
-  para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
-    "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", "note")
-  para("Rule rows: another of your rules is active (its conditions are met right now) or isn't. Example: Earth Shock glows while your Flame Shock rule is inactive. A rule can't depend on itself, and rules that depend on each other in a loop never glow.", "note")
-  para("Health and Mana rows: yours or your target's, compared with a %: > (more than), >= (at least), < (less than), <= (at most) or = (exactly). Example: Healing Wave glows while your target's health is < 40%; Evocation while your mana is < 20%. When the game hides the value (health in combat, your mana always), the game itself checks it against your % and switches the glow: Proc This! never sees the number. A dead target, or one without mana, never counts.", "note")
-  para("Combo Points, Rage and Energy rows: yours, compared with an amount the same way. Example: Eviscerate glows while your combo points are >= 5, or = 3; Sinister Strike while your energy is >= 45. Combo points are always readable; when the game hides rage or energy (in combat), the game itself checks them.", "note")
-  para("Rules are kept per character: each character has its own list. Settings > Rules on other characters copies another character's rules into this one.", "note")
-  para("Instant Cast rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt spell <spell> shows a spell's cast time.", "note")
-  para("/pt (or /proc, /procthis)  opens this window      /pt test  shows every rule's glow for 3 seconds      " ..
-    "/pt auras  lists buffs and debuffs on you and your target with their spell IDs (out of combat)      " ..
-    "/pt spell <spell>  its cast time, how long it lasts, charges      /pt buttons  what each macro button reads as now      " ..
-    "/pt power  what's readable of your power      /pt perf  how long glow updates take      /pt api  which game functions this client has      " ..
-    "/pt debug  print each rule's status changes      /pt report  bugs & feedback (also the button at the top right)")
-  pg:SetHeight(-y + 10)
-  page:SetScript("OnShow", function()
-    scroll:SetVerticalScroll(0); scroll.Update()
+    "(for example another player's curse) can only be checked out of combat.", true)
+  local cdm = UI.Font(p, "GameFontHighlight", ""); cdm:SetPoint("TOPLEFT", 7, R.y); R:Space(26)
+  R:Track({ Refresh = function()
     local on = GetCVarBool and GetCVarBool("cooldownViewerEnabled")
     cdm:SetText(on and "|cff60ff60Cooldown Manager: on|r" or "|cffff6060Cooldown Manager: off. Turn it on in Options > Gameplay Enhancements.|r")
-  end)
+  end })
+  R:Section("Conditions")
+  para("Every condition reads the same way, left to right: what kind, on whom, what, and its state. [Debuff] [Target] [Stormstrike] [Active]: glows while your Stormstrike debuff is on your target. [Rule] [Lightning Bolt] [Inactive]: while your Lightning Bolt rule isn't active. Click any part to switch it.", true)
+  para("Groups: each group needs all of its rows, or any one of them (its switch). Groups are joined by AND (every group) or OR (any group). " ..
+    "Example: Group 1 (Any of these): Buff X, Buff Y  AND  Group 2 (All of these): Debuff Z, Debuff Y.", true)
+  para("Rule rows: another of your rules is active (its conditions are met right now) or isn't. Example: Earth Shock glows while your Flame Shock rule is inactive. A rule can't depend on itself, and rules that depend on each other in a loop never glow.", true)
+  para("Health and Mana rows: yours or your target's, compared with a %: > (more than), >= (at least), < (less than), <= (at most) or = (exactly). Example: Healing Wave glows while your target's health is < 40%; Evocation while your mana is < 20%. When the game hides the value (health in combat, your mana always), the game itself checks it against your % and switches the glow: Proc This! never sees the number. A dead target, or one without mana, never counts.", true)
+  para("Combo Points, Rage and Energy rows: yours, compared with an amount the same way. Example: Eviscerate glows while your combo points are >= 5, or = 3; Sinister Strike while your energy is >= 45. Combo points are always readable; when the game hides rage or energy (in combat), the game itself checks them.", true)
+  para("Instant Cast rows: the spell is instant cast right now, from its cast time (readable in combat). Covers Maelstrom Weapon at 5 stacks, Nature's Swiftness, Presence of Mind, Shadow Trance and the like. Example: Lightning Bolt glows while Lightning Bolt is instant. /pt spell <spell> shows a spell's cast time.", true)
+  para("Rules are kept per character: each character has its own list. Settings > Rules on other characters copies another character's rules into this one.", true)
+  R:Section("Commands")
+  para("/pt (or /proc, /procthis): this window.  /pt test: every rule's glow for 3 seconds.  " ..
+    "/pt auras: the buffs and debuffs on you and your target with their spell IDs (out of combat).  " ..
+    "/pt spell <spell>: its cast time, how long it lasts, charges.  /pt buttons: what each macro button reads as now.  " ..
+    "/pt power: what's readable of your power.  /pt perf: how long glow updates take.  /pt api: which game functions this client has.  " ..
+    "/pt debug: print each rule's status changes.  /pt report: bugs & feedback.")
 end
 
 local function BuildWindow()
-  win = UI.Window("ProcThisWindow", 760, 580)
-  win:SetPoint("CENTER")
-  UI.SetHost(win) -- pop-ups (the bug report, Share) sit over this window
-  UI.HeaderButton(win, "Bugs & Feedback", 130, function() ns.ShowBugReport() end)
-  local title = UI.Text(win, "title", "Proc This!")
-  title:SetPoint("TOPLEFT", 26, -20)
-  UI.Text(win, "note", "Custom procs: glow any spell when your conditions are met."):SetPoint("LEFT", title, "RIGHT", 10, -1)
-  UI.Tabs(win, { { "Rules", PageRules }, { "Settings", PageSettings }, { "Help", PageHelp } }, 26, -66, 708, PAGE_H)
-
-  win:SetScript("OnShow", function(self)
-    local fit = (UIParent:GetHeight() - 40) / self:GetHeight()
-    self:SetScale(math.max(0.5, math.min(1, fit)))
-    for _, w in ipairs(refreshers) do w.Refresh() end
-    ui.Refresh()
-  end)
+  win = UI.Settings({ name = "ProcThisWindow", title = "Proc This!", logo = "Interface\\AddOns\\ProcThis\\media\\Logo",
+    tagline = "Custom procs: glow any spell when your conditions are met.", bug = function() ns.ShowBugReport() end,
+    pages = {
+      { "Rules", "Your rules: add, order, share.", PageRules },
+      { "Edit Rule", "The selected rule: its spell, conditions, look and live status.", PageEdit },
+      { "Settings", "Timing, other UIs, and rules on your other characters.", PageSettings },
+      { "Help", "How rules work, the Cooldown Manager, and the commands.", PageHelp },
+    },
+    categories = { { "Proc This!", { 1, 2, 3 } }, { "Help", { 4 } } } })
+  win:HookScript("OnShow", function() ui.Refresh() end)
   local t = 0
   win:SetScript("OnUpdate", function(_, dt) t = t + dt; if t > 0.5 then t = 0; ui.Status() end end)
-  win:Hide()
 end
 
 -- Share rules: export as text (this rule with the rules it uses, or all) or import text someone
@@ -829,13 +811,12 @@ local share
 -- fill: text to put in the box at once, with its note
 function ns.OpenShare(fill, note)
   if not share then
-    share = UI.Popup("ProcThisShare", 580, 196)
-    local t = UI.Text(share, "title", "Share rules"); t:SetPoint("TOPLEFT", 20, -18)
+    share = UI.Popup("ProcThisShare", 580, 200, "Share rules")
     local text = ""
     local box = UI.Edit(share, 540, { function() return text end, function(v) text = v end }, "Paste rules text here to import")
     box:SetMaxLetters(0)
-    box:SetPoint("TOPLEFT", 20, -52)
-    local msg = UI.Text(share, "note", ""); msg:SetPoint("TOPLEFT", 20, -82); msg:SetWidth(540)
+    box:SetPoint("TOPLEFT", 22, -44)
+    local msg = UI.Note(share, "", 540); msg:SetPoint("TOPLEFT", 20, -76)
     local function Show(str, why)
       text = str; box:SetText(str); box:SetFocus(); box:HighlightText()
       msg:SetText(why or "Copied into the box: press Ctrl+C to copy it, then paste it where you like.")
@@ -846,9 +827,9 @@ function ns.OpenShare(fill, note)
       if r then Show(ns.Share.Export(ns.db.rules, r)) end
     end)
     one.tip = "The rule selected in the list, with any rules it uses (its Rule rows)."
-    one:SetPoint("TOPLEFT", 20, -118)
+    one:SetPoint("BOTTOMLEFT", 18, 16)
     local all = UI.Button(share, "Export all rules", 140, function() Show(ns.Share.Export(ns.db.rules)) end)
-    all:SetPoint("LEFT", one, "RIGHT", 8, 0)
+    all:SetPoint("LEFT", one, "RIGHT", 6, 0)
     local imp = UI.Button(share, "Import", 110, function()
       local rules, err = ns.Share.Import(box:GetText())
       if not rules then msg:SetText("|cffff6060Can't import: " .. err .. ".|r"); return end
@@ -859,9 +840,9 @@ function ns.OpenShare(fill, note)
       Changed()
     end)
     imp.tip = "Add the rules in the box to this character's list (nothing is replaced)."
-    imp:SetPoint("LEFT", all, "RIGHT", 8, 0)
-    local close = UI.Button(share, "Close", 90, function() share:Hide() end)
-    close:SetPoint("TOPRIGHT", -20, -118)
+    imp:SetPoint("LEFT", all, "RIGHT", 6, 0)
+    local close = UI.Button(share, CLOSE or "Close", 96, function() share:Hide() end)
+    close:SetPoint("BOTTOMRIGHT", -16, 16)
     share.Reset = function()
       text = ""; box:SetText("")
       msg:SetText("Export rules to share them, or paste rules text and Import.")
@@ -924,8 +905,8 @@ function ns.OpenOptions()
     local ok, e = pcall(BuildWindow)
     if not ok then if win then win:Hide() end; win = nil; ns.Print("settings failed: " .. tostring(e)); return end
   end
-  UI.Restyle()
-  win:SetShown(not win:IsShown())
+  UI.ToggleWindow(win)
+  return win
 end
 
 ---------------------------------------------------------------------------
@@ -958,10 +939,6 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     if ns.HasEllesmere() and not ns.db.seenUI.eui then
       ns.db.seenUI.eui = true
       ns.Print("EllesmereUI found: Proc This! glows on its bars, and its glow styles are in each rule's Look.")
-    end
-    if ns.HasFlare() and not ns.db.seenUI.flare then
-      ns.db.seenUI.flare = true
-      ns.Print("FlareUI found: Proc This!'s window takes its style.")
     end
     -- Esc > Options > AddOns: a button that opens the window
     pcall(function()

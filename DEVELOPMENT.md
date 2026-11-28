@@ -37,14 +37,15 @@ Load order (ProcThis.toc): Core → Share → Compat → Result → State → Bu
 
 | File | Module | Does |
 |---|---|---|
-| Core.lua | `ns` | Rule and condition defaults (`NEW_RULE`, `NEW_AURA`), saved variables (`ProcThisDB`: shared settings, `chars[Name-Realm].rules`), migrations of older rule formats, rule ids, per-character set-up and copying, spell / item names, glow colours and looks, EllesmereUI / FlareUI detection |
+| Core.lua | `ns` | Rule and condition defaults (`NEW_RULE`, `NEW_AURA`), saved variables (`ProcThisDB`: shared settings, `chars[Name-Realm].rules`), migrations of older rule formats, rule ids, per-character set-up and copying, spell / item names, glow colours and looks, EllesmereUI detection |
 | Share.lua | `ns.Share` | Rules as text (1.20.0): `Export(rules, rule?)` ("PT1:" and a plain serialization; one rule comes with the rules it uses), `Import(text)` (its own parser, never `loadstring`; only known fields, each checked for type and allowed values; size, depth and count limits) |
 | Compat.lua | `ns.API` | The compatibility layer (1.18.0): every game function used to read conditions and buttons, by name, with the forms it may take (newer `C_` namespaces, older globals); `API.Call` (safe: answered / failed / not on this client), `API.Has`, `/pt api` |
 | Result.lua | `ns.Result` | The result model: TRUE / FALSE / GATED / UNKNOWN / ERROR, and how they combine (AND, OR, NOT). Pure Lua |
 | State.lua | `ns.State` | Every condition reader: buffs (direct, Cooldown Manager, estimates), target debuffs (direct, Cooldown Manager, estimates from your casts per target), health / mana / combo points / rage / energy (readable, or step curves for hidden values), cast time, melee, castable, cooldown, control, combat, proc flag |
 | Buttons.lua | `ns.Buttons` | Button providers (1.19.0): Blizzard's bars, EllesmereUI's `EABButton`s (and their shapes), LibActionButton-1.0 bars (Bartender4, ElvUI...); the list (built again on a UI loading, entering the world, a restyle, or every 5 s while a provider whose buttons come and go is present), buttons that dropped out, each button's action slot |
 | Glow.lua | `ns.Glow` | What each button holds (spell, item, macro), the evaluator (rows → groups → rule), the update loop and events, the glow frames (Blizzard's alert template, gates, styles, EllesmereUI glows) |
-| UI.lua | `ns.UI` | The shared settings-window kit (and EllesmereUI / FlareUI looks) |
+| UI.lua | `ns.UI` | Proc This!'s own window parts: a checkbox with its name, the Yes / No question |
+| Settings.lua | `ns.UI` | The shared settings kit (2.2.0): the game's own Settings design (window, pages, search, rows, controls, pop-ups, the Bugs & Feedback window), the same in every addon |
 | Options.lua | — | The settings window (rules list, editor, look, settings, help), live status per rule, start-up, slash commands |
 
 ### Data model

@@ -57,7 +57,6 @@ ns.GLOW_COLORS = {
 -- Other UIs, found by themselves: each one's "mode" is on while it's installed (and the player hasn't
 -- turned it off in Settings).
 function ns.HasEllesmere() return type(EllesmereUI) == "table" and type(EllesmereUI.Glows) == "table" end
-function ns.HasFlare() return ns.UI and ns.UI.FlareBorder and ns.UI.FlareBorder() ~= nil end
 -- EllesmereUI's glow styles (EllesmereUI.Glows.STYLES, matched by name): { key, label, its name }
 ns.EUI_GLOWS = {
   { "blizzard", "Proc This! glow" },
