@@ -2,10 +2,11 @@
 
 ## 2.2.0
 
-- A new settings window in the game's own Settings design, the same with any UI installed: the pages down the left (Rules, Edit Rule, Settings, Help), the game's checkboxes, buttons and text boxes, white section headings, a search box. Rules: the list with its buttons beside it; click a rule to select it, Edit rule (or a double-click) to open it. Edit Rule: the whole editor, now the page's full width.
+- A new settings window in the game's own Settings design, the same with any UI installed: the pages down the left (Rules, Settings, Help), the game's checkboxes, buttons and text boxes, white section headings, a search box. Rules: the list with its buttons beside it; click a rule to select it, Edit rule (or a double-click) opens it in its own window, the editor's full width.
 - Fixed: "Use for all rules" in a rule's Look did nothing (its question window was missing); it now asks, then gives every rule that look.
 - The Share and Bugs & Feedback windows match.
 - FlareUI no longer changes Proc This! (it only styled the window). EllesmereUI's glows and shaped buttons are as before.
+- With several of the author's addons installed, each settings window shows them all as icon tabs at its top left: click one for its settings, in the same place.
 
 ## 2.1.0
 

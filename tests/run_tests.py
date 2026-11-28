@@ -796,7 +796,7 @@ def _():
     assert(NS.db.rules[1].id ~= nil)
     """
 
-@test("settings window (2.2.0): the game's Settings design; the rules list, the editor, settings and help; Use for all rules asks first")
+@test("settings window (2.2.0): the game's Settings design; the rules list, the editor in its own window, settings and help; Use for all rules asks first")
 def _():
     """
     MinimalSliderWithSteppersMixin = MinimalSliderWithSteppersMixin or { Label = { Right = 2 }, Event = { OnValueChanged = "OnValueChanged" } }
@@ -807,9 +807,13 @@ def _():
     assert(w and w.index and w._shown, tostring(printed))
     local where = {}
     for _, e in ipairs(w.index) do where[e.label] = e.page end
-    assert(where["Your rules"] == 1 and where["Copy from"] == 3 and where["Commands"] == 4, "pages")
+    assert(where["Your rules"] == 1 and where["Copy from"] == 2 and where["Commands"] == 3, "pages")
     w.Refresh()
-    for i = 1, 4 do w.Select(i) end
+    for i = 1, 3 do w.Select(i) end
+    -- the rule editor: its own window
+    NS.OpenRuleEditor()
+    assert(_G.ProcThisRuleEditor and _G.ProcThisRuleEditor._shown, "editor window")
+    _G.ProcThisRuleEditor._scripts.OnUpdate(_G.ProcThisRuleEditor, 1)
     w._scripts.OnShow(w)
     w._scripts.OnUpdate(w, 1)
     -- a second rule, edited and given the first one's look (it asks first: the old button had no question to ask)

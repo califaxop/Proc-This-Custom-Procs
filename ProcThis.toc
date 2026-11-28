@@ -16,5 +16,6 @@ State.lua
 Buttons.lua
 Glow.lua
 UI.lua
+Suite.lua
 Settings.lua
 Options.lua

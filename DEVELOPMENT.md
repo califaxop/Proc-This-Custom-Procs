@@ -46,6 +46,7 @@ Load order (ProcThis.toc): Core → Share → Compat → Result → State → Bu
 | Glow.lua | `ns.Glow` | What each button holds (spell, item, macro), the evaluator (rows → groups → rule), the update loop and events, the glow frames (Blizzard's alert template, gates, styles, EllesmereUI glows) |
 | UI.lua | `ns.UI` | Proc This!'s own window parts: a checkbox with its name, the Yes / No question |
 | Settings.lua | `ns.UI` | The shared settings kit (2.2.0): the game's own Settings design (window, pages, search, rows, controls, pop-ups, the Bugs & Feedback window), the same in every addon |
+| Suite.lua | `ns.Suite` | The author's addons together: each installed one's settings window shows them all as icon tabs (a shared list, `CalifaxOPAddons`); the same file in every addon |
 | Options.lua | — | The settings window (rules list, editor, look, settings, help), live status per rule, start-up, slash commands |
 
 ### Data model

@@ -78,7 +78,8 @@ local function ColorChoice(parent, width, get, set, custom, withDefault, onChang
   sw:SetScript("OnLeave", function() GameTooltip:Hide() end)
   return f
 end
-local EW = 610 -- editor content width (the page's)
+local EW = 620 -- the rule editor's width
+local EDIT = 6 -- the game's text box draws its left edge this far out: boxes sit this far in
 
 ---------------------------------------------------------------------------
 -- Rule editor: spell, aura conditions (as many as you like), other conditions, live status
@@ -129,7 +130,7 @@ local function BuildEditor(p)
   e.title = UI.Font(p, "GameFontHighlightLarge", "")
   e.title:SetPoint("LEFT", e.icon, "RIGHT", 8, 0); e.title:SetWidth(EW - 140); e.title:SetWordWrap(false)
   e.enabled = UI.LabeledCheck(p, "Enabled", Field(Rule, "enabled"), function() ui.Refresh(); Changed() end)
-  e.enabled:SetPoint("TOPRIGHT", p, "TOPLEFT", EW - 60, 0)
+  e.enabled:SetPoint("TOPRIGHT", p, "TOPLEFT", EW - 70, 0)
 
 
   -- spell
@@ -299,17 +300,17 @@ local function BuildEditor(p)
     row.lasts:SetPoint("LEFT", row.mine.label, "RIGHT", 10, 0)
     row.dur = UI.Edit(row, 34, { function() local a = A(); return a and a.dur end,
       function(v) local a = A(); if a then a.dur = math.max(0, math.min(600, tonumber(v) or 0)); refresh() end end }, "", false, true)
-    row.dur:SetPoint("LEFT", row.lasts, "RIGHT", 4, 0)
+    row.dur:SetPoint("LEFT", row.lasts, "RIGHT", 4 + EDIT, 0)
     row.after = UI.Note(row, "s, used up after")
     row.after:SetPoint("LEFT", row.dur, "RIGHT", 4, 0)
     row.charges = UI.Edit(row, 28, { function() local a = A(); return a and a.charges end,
       function(v) local a = A(); if a then a.charges = math.max(0, math.min(20, math.floor(tonumber(v) or 0))); refresh() end end }, "", false, true)
-    row.charges:SetPoint("LEFT", row.after, "RIGHT", 4, 0)
+    row.charges:SetPoint("LEFT", row.after, "RIGHT", 4 + EDIT, 0)
     row.casts = UI.Note(row, "casts of")
     row.casts:SetPoint("LEFT", row.charges, "RIGHT", 4, 0)
     row.usedBy = UI.Edit(row, 92, { function() local a = A(); return a and a.usedBy end,
       function(v) local a = A(); if a then a.usedBy = v; refresh() end end }, "this spell", false)
-    row.usedBy:SetPoint("LEFT", row.casts, "RIGHT", 4, 0)
+    row.usedBy:SetPoint("LEFT", row.casts, "RIGHT", 4 + EDIT, 0)
     row.extra = { row.mine, row.lasts, row.dur, row.after, row.charges, row.casts, row.usedBy }
     row.dur.tip = "Backup when it isn't in the Cooldown Manager: how long it lasts after you cast it (0 = auto)."
     row.Refresh = function()
@@ -348,7 +349,8 @@ local function BuildEditor(p)
       else chain = { row.kind, row.unit, row.name, row.mode } end
       for j, w in ipairs(chain) do
         w:ClearAllPoints()
-        if j == 1 then w:SetPoint("TOPLEFT", 0, 0) else w:SetPoint("LEFT", chain[j - 1], "RIGHT", (w == row.pctSign or chain[j - 1] == row.pctSign) and 4 or 6, 0) end
+        local gap = (w == row.pctSign or chain[j - 1] == row.pctSign) and 4 or ((w == row.name or w == row.pct) and 6 + EDIT or 6)
+        if j == 1 then w:SetPoint("TOPLEFT", 0, 0) else w:SetPoint("LEFT", chain[j - 1], "RIGHT", gap, 0) end
       end
       row.dot:ClearAllPoints()
       row.dot:SetPoint("LEFT", chain[#chain], "RIGHT", 10, 0)
@@ -370,7 +372,7 @@ local function BuildEditor(p)
     local bx = CreateFrame("Frame", nil, p, "BackdropTemplate")
     bx:SetFrameLevel(math.max(1, p:GetFrameLevel()))
     bx:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    bx:SetBackdropColor(0, 0, 0, 0.25); bx:SetBackdropBorderColor(0.45, 0.45, 0.45, 0.8)
+    bx:SetBackdropColor(0, 0, 0, 0.25); bx:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
     bx.title = UI.Font(bx, "GameFontNormal", "Group " .. g)
     bx.title:SetPoint("TOPLEFT", 10, -9)
     bx.mode = UI.Toggle(p, 210, { { "all", "All of these must hold" }, { "any", "Any one of these is enough" } },
@@ -406,7 +408,7 @@ local function BuildEditor(p)
     local y = -44
     local function place(w, x, dy) w:ClearAllPoints(); w:SetPoint("TOPLEFT", p, "TOPLEFT", x, y); y = y - dy end
     place(e.secSpell, 0, 30)
-    e.spell:ClearAllPoints(); e.spell:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y)
+    e.spell:ClearAllPoints(); e.spell:SetPoint("TOPLEFT", p, "TOPLEFT", EDIT, y)
     e.spellNote:ClearAllPoints(); e.spellNote:SetPoint("LEFT", e.spell, "RIGHT", 12, 0)
     y = y - 36
     place(e.secAuras, 0, 30)
@@ -442,16 +444,16 @@ local function BuildEditor(p)
         place(row, 12, row:GetHeight() + 4)
         i = i + 1
       end
-      bx.add:ClearAllPoints(); bx.add:SetPoint("TOPLEFT", p, "TOPLEFT", 12, y - 2)
+      bx.add:ClearAllPoints(); bx.add:SetPoint("TOPLEFT", p, "TOPLEFT", 12 + EDIT, y - 2)
       bx.addBtn:ClearAllPoints(); bx.addBtn:SetPoint("LEFT", bx.add, "RIGHT", 6, 0)
       bx.add.Refresh()
-      y = y - 32
+      y = y - 34
       bx:SetHeight(top - y)
       y = y - 8
     end
     for k = n + 1, #e.rows do e.rows[k]:Hide() end
     for g = ngroups + 1, #e.boxes do for _, w in ipairs(e.boxes[g].parts) do w:Hide() end end
-    e.newGroupBox:ClearAllPoints(); e.newGroupBox:SetPoint("TOPLEFT", p, "TOPLEFT", 0, y - 2)
+    e.newGroupBox:ClearAllPoints(); e.newGroupBox:SetPoint("TOPLEFT", p, "TOPLEFT", EDIT, y - 2)
     e.newGroup:ClearAllPoints(); e.newGroup:SetPoint("LEFT", e.newGroupBox, "RIGHT", 6, 0)
     y = y - 40
     place(e.secOther, 0, 30)
@@ -589,11 +591,11 @@ local function BuildList(p, top)
     if ns.char then ns.char.fresh = nil end -- (you're making this character's rules yourself)
     table.insert(ns.db.rules, r)
     selected = #ns.db.rules; ui.Refresh(); Changed()
-    if win then win.Select(2) end
+    ns.OpenRuleEditor()
   end
   l.add = UI.Button(p, "+ Add rule", 170, function() Added(ns.NewRule()) end)
   l.add:SetPoint("TOPLEFT", X, top)
-  l.edit = UI.Button(p, "Edit rule", 170, function() if win then win.Select(2) end end)
+  l.edit = UI.Button(p, "Edit rule", 170, function() ns.OpenRuleEditor() end)
   l.edit.tip = "Open the selected rule (or click it twice)."
   l.edit:SetPoint("TOPLEFT", l.add, "BOTTOMLEFT", 0, -6)
   -- a copy of this rule, and its place (priority: when several rules glow one spell, the higher one
@@ -656,7 +658,7 @@ local function BuildList(p, top)
           if self.why then GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetText(self.why, 1, 1, 1, 1, true); GameTooltip:Show() end
         end)
         row:SetScript("OnLeave", function(self) self.hover = false; paintRow(self, self.i, ns.db.rules[self.i] or {}); GameTooltip:Hide() end)
-        row:SetScript("OnDoubleClick", function() if win then win.Select(2) end end)
+        row:SetScript("OnDoubleClick", function() ns.OpenRuleEditor() end)
         rows[i] = row
       end
       row.i = i
@@ -698,17 +700,43 @@ end
 ---------------------------------------------------------------------------
 -- Pages
 ---------------------------------------------------------------------------
-local list, editor
+local list, editor, editWin
 local function PageRules(p, R)
   R:Section("Your rules")
-  R:Note("Each rule glows a spell or item on your action bars while its conditions hold. Click a rule to select it; Edit rule (or a double-click) opens it. The dot: green glowing, yellow the game decides, orange can't tell, red an error.")
+  R:Note("Each rule glows a spell or item on your action bars while its conditions hold. Click a rule to select it; Edit rule (or a double-click) opens it in its own window. The dot: green glowing, yellow the game decides, orange can't tell, red an error.")
   list = BuildList(p, R:Space(390))
+  ui = { Refresh = function()
+      list.Refresh()
+      if editor and editWin:IsShown() then
+        if not Rule() then editWin:Hide(); return end -- (its rule was removed)
+        editor.Refresh(); editor.UpdateStatus()
+        local r = Rule(); editWin:SetTitle(r and ("Edit Rule: " .. ns.RuleLabel(r)) or "Edit Rule")
+      end
+    end,
+    Status = function() list.RefreshStatus(); if editor and editWin:IsShown() then editor.UpdateStatus() end end }
 end
 
-local function PageEdit(p)
-  editor = BuildEditor(p)
-  ui = { Refresh = function() list.Refresh(); editor.Refresh(); editor.UpdateStatus() end,
-    Status = function() editor.UpdateStatus(); list.RefreshStatus() end }
+-- The rule editor: its own window over the settings, for the rule selected in the list
+local function BuildEditWindow()
+  editWin = UI.Window("ProcThisRuleEditor", EW + 70, 640, "Edit Rule")
+  local scroll = CreateFrame("ScrollFrame", nil, editWin, "ScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 20, -34); scroll:SetPoint("BOTTOMRIGHT", -34, 48)
+  local content = CreateFrame("Frame", nil, scroll)
+  content:SetSize(EW, 1)
+  scroll:SetScrollChild(content)
+  editor = BuildEditor(content)
+  local close = UI.Button(editWin, CLOSE or "Close", 96, function() editWin:Hide() end)
+  close:SetPoint("BOTTOMRIGHT", -16, 14)
+  local t = 0
+  editWin:SetScript("OnUpdate", function(_, dt) t = t + dt; if t > 0.5 then t = 0; editor.UpdateStatus() end end)
+  editWin:Hide()
+end
+function ns.OpenRuleEditor()
+  if not ns.db.rules[selected] then return end
+  if not editWin then BuildEditWindow() end
+  if win then ns.Suite.Place(editWin, win) end
+  editWin:Show(); editWin:Raise()
+  ui.Refresh()
 end
 
 local function PageSettings(_, R)
@@ -719,7 +747,7 @@ local function PageSettings(_, R)
   R:Section("Other UIs")
   local eui = R:Row("EllesmereUI", "Found and used on its own: no settings.")
   UI.Note(eui, ns.HasEllesmere() and "In use: glows on its bars, and its glow styles in each rule's Look." or "Not installed."):SetPoint("LEFT", R.ctrl, 0)
-  R:Note("Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, under Edit Rule.")
+  R:Note("Each rule's glow (colour, start, pulse, size, intensity) is set in its Look section, in the rule's own window (Rules, Edit rule).")
   -- rules are per character: copy another character's into this one
   R:Section("Rules on other characters")
   local here = R:Note("")
@@ -791,15 +819,15 @@ local function PageHelp(p, R)
 end
 
 local function BuildWindow()
-  win = UI.Settings({ name = "ProcThisWindow", title = "Proc This!", logo = "Interface\\AddOns\\ProcThis\\media\\Logo",
-    tagline = "Custom procs: glow any spell when your conditions are met.", bug = function() ns.ShowBugReport() end,
+  win = UI.Settings({ name = "ProcThisWindow", title = "Proc This!",
+    bug = function() ns.ShowBugReport() end,
     pages = {
-      { "Rules", "Your rules: add, order, share.", PageRules },
-      { "Edit Rule", "The selected rule: its spell, conditions, look and live status.", PageEdit },
+      { "Rules", "Your rules: add, order, edit, share.", PageRules },
       { "Settings", "Timing, other UIs, and rules on your other characters.", PageSettings },
       { "Help", "How rules work, the Cooldown Manager, and the commands.", PageHelp },
     },
-    categories = { { "Proc This!", { 1, 2, 3 } }, { "Help", { 4 } } } })
+    categories = { { "Proc This!", { 1, 2 } }, { "Help", { 3 } } } })
+  win:HookScript("OnHide", function() if editWin then editWin:Hide() end end)
   win:HookScript("OnShow", function() ui.Refresh() end)
   local t = 0
   win:SetScript("OnUpdate", function(_, dt) t = t + dt; if t > 0.5 then t = 0; ui.Status() end end)
@@ -900,14 +928,21 @@ function ns.ShowBugReport(kind)
   return UI.ShowBugReport(BUG, kind)
 end
 
-function ns.OpenOptions()
+-- the settings window, built the first time it's asked for
+local function GetWindow()
   if not win then
     local ok, e = pcall(BuildWindow)
     if not ok then if win then win:Hide() end; win = nil; ns.Print("settings failed: " .. tostring(e)); return end
   end
-  UI.ToggleWindow(win)
   return win
 end
+function ns.OpenOptions()
+  local w = GetWindow()
+  if w then UI.ToggleWindow(w) end
+  return w
+end
+UI.JoinSuite("Proc This!", "Custom procs: glow any spell when your conditions are met.",
+  "Interface\\AddOns\\ProcThis\\media\\Logo", 2, GetWindow)
 
 ---------------------------------------------------------------------------
 -- Start-up and slash commands
